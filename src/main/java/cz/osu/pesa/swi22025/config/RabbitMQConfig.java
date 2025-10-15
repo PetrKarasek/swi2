@@ -3,6 +3,7 @@ package cz.osu.pesa.swi22025.config;
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.annotation.EnableRabbit;
+import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
@@ -22,7 +23,7 @@ public class RabbitMQConfig {
     @Value("${spring.rabbitmq.password}")
     private String password;
 
-    static final String CHATROOM_EXCHANGE = "chatroom.exchange";
+    public static final String CHATROOM_EXCHANGE = "chatroom.exchange";
 
     @Bean
     public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
@@ -43,21 +44,19 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public RabbitAdmin rabbitAdmin(ConnectionFactory connectionFactory) {
+        return new RabbitAdmin(connectionFactory);
+    }
+
+    @Bean
     public FanoutExchange chatroomExchange() {
         return new FanoutExchange(CHATROOM_EXCHANGE);
     }
 
-    /*
     public Queue createUserQueue(String userId) {
         return new Queue("chatroom.queue." + userId, true);
-    }*/
-
-    @Bean
-    public Queue createQueue() {
-        return new Queue("chatroom.queue", true);
     }
 
-    @Bean
     public Binding bindUserQueue(Queue queue, FanoutExchange exchange) {
         return BindingBuilder.bind(queue).to(exchange);
     }

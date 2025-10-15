@@ -25,7 +25,7 @@ public class UserController {
         return userService.signup(userDTO);
     }
 
-    @PostMapping("login")
+    @PostMapping("/login")
     public ResponseEntity<Object> authenticate(@RequestBody SignupForm userCredentials) {
         return userService.authenticate(userCredentials);
     }

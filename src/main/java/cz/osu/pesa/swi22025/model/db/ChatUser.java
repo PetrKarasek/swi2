@@ -3,6 +3,8 @@ package cz.osu.pesa.swi22025.model.db;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -16,4 +18,25 @@ public class ChatUser {
     private String username;
     @Column(nullable = false)
     private String password;
+
+    @ManyToMany
+    @JoinTable(
+            name = "chat_member",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "chat_id")
+    )
+    List<ChatRoom> joinedRooms = new ArrayList<>();
+
+    @OneToMany(mappedBy = "chatUser")
+    private List<Message> messages = new ArrayList<>();
+
+    public void addRoom(ChatRoom chatRoom) {
+        this.joinedRooms.add(chatRoom);
+        chatRoom.getJoinedUsers().add(this);
+    }
+
+    public void addMessage(Message message) {
+        this.messages.add(message);
+        message.setChatUser(this);
+    }
 }
