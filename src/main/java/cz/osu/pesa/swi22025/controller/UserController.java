@@ -1,5 +1,6 @@
 package cz.osu.pesa.swi22025.controller;
 
+import cz.osu.pesa.swi22025.model.json.PayloadMessage;
 import cz.osu.pesa.swi22025.model.json.SignupForm;
 import cz.osu.pesa.swi22025.service.UserService;
 import org.springframework.http.ResponseEntity;
@@ -29,4 +30,29 @@ public class UserController {
     public ResponseEntity<Object> authenticate(@RequestBody SignupForm userCredentials) {
         return userService.authenticate(userCredentials);
     }
+
+    @PostMapping("/send")
+    public void send() {
+        PayloadMessage message = new PayloadMessage();
+        message.setContent("Ahoj");
+        message.setSenderName("Radim");
+        message.setReceiverChatRoomId("1");
+        String destination = "/chatroom/" + message.getReceiverChatRoomId();
+        messagingTemplate.convertAndSend(destination, message);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }

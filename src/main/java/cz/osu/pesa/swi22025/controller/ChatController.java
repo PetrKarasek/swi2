@@ -16,17 +16,24 @@ public class ChatController {
     private ChatMessageService chatMessageService;
 
     @MessageMapping("/message") // url: /app/message
-    public PayloadMessage receivePublicMessage(@Payload PayloadMessage messsage) {
+    public PayloadMessage receivePublicMessage(@Payload PayloadMessage message) {
         // todo: poslat zprávu do queue všech uživatelů
+        chatMessageService.broadcastMessage(message);
 
         // todo: poslat zprávu přes websockety všem přihlášeným uživatelům, aby si ji vyzvedli
 
         // todo: práce s databází
+
+        String destination = "/chatroom/" + message.getReceiverChatRoomId();
+        messagingTemplate.convertAndSend(destination, message);
+        return message;
     }
 
     @MessageMapping("/private-message") // url: /user/username/private
-    public PayloadMessage receivePrivateMessage(@Payload PayloadMessage messsage) {
+    public PayloadMessage receivePrivateMessage(@Payload PayloadMessage message) {
         // todo
+        messagingTemplate.convertAndSendToUser(message.getReceiverName(), "/private", message);
+        return message;
     }
 
 }

@@ -1,6 +1,9 @@
 import { Box, Button, Chip, Divider, TextField } from "@mui/material";
+import axios from "axios";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+
+const LOGIN_TOKEN_URL = "http://localhost:8081/login";
 
 const Login = (props: any) => {
   const [username, setUsername] = useState("");
@@ -8,7 +11,25 @@ const Login = (props: any) => {
 
   function login(e: any) {
     e.preventDefault();
-    props.setUserToken(username);
+    
+    const userCredentials = {
+      username: username,
+      password: password
+    };
+
+    axios.post(LOGIN_TOKEN_URL, userCredentials)
+      .then(response => {
+        props.setUserToken(response.data);
+      })
+      .catch(error => {
+        try {
+          console.log(error.response.data);
+          // výpis na stránku
+        } catch (e) {
+          console.log(e);
+          // Cannot access authentication server
+        }
+      });
   }
 
   return (

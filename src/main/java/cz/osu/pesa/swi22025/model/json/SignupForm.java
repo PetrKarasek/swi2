@@ -1,6 +1,5 @@
 package cz.osu.pesa.swi22025.model.json;
 
-import cz.osu.pesa.swi22025.model.db.ChatUser;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
