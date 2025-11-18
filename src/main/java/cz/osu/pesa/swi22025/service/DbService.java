@@ -25,9 +25,9 @@ public class DbService {
         return ResponseEntity.ok(chatUsers);
     }
 
-    public ResponseEntity<List<ChatRoom>> getChatRooms(UUID userId) {
+    public ResponseEntity<List<ChatRoom>> getChatRooms(String username) {
         List<ChatRoom> chatRooms = chatRoomRepository
-                .findByJoinedUsers_UserId(userId);
+                .findByJoinedUsers_Username(username);
         chatRooms.forEach(chatRoom -> chatRoom.setJoinedUsers(null));
         for (ChatRoom chatRoom : chatRooms) {
             for (Message message : chatRoom.getMessages()) {

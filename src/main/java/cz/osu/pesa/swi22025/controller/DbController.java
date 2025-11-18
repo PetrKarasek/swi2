@@ -25,7 +25,7 @@ public class DbController {
     }
 
     @GetMapping(value = "/chatrooms")
-    public ResponseEntity<List<ChatRoom>> getChatRooms(@RequestParam UUID userId) {
-        return dbService.getChatRooms(userId);
+    public ResponseEntity<List<ChatRoom>> getChatRooms(@RequestParam String username) {
+        return dbService.getChatRooms(username);
     }
 }
