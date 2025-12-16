@@ -1,13 +1,13 @@
-package cz.osu.pesa.swi22025.controller;
+package cz.osu.swi22025.controller;
 
-import cz.osu.pesa.swi22025.model.json.PayloadMessage;
-import cz.osu.pesa.swi22025.service.ChatMessageService;
-import cz.osu.pesa.swi22025.model.db.Message;
-import cz.osu.pesa.swi22025.model.db.ChatUser;
-import cz.osu.pesa.swi22025.model.db.ChatRoom;
-import cz.osu.pesa.swi22025.model.MessageRepository;
-import cz.osu.pesa.swi22025.model.UserRepository;
-import cz.osu.pesa.swi22025.model.ChatRoomRepository;
+import cz.osu.swi22025.model.json.PayloadMessage;
+import cz.osu.swi22025.service.ChatMessageService;
+import cz.osu.swi22025.model.db.Message;
+import cz.osu.swi22025.model.db.ChatUser;
+import cz.osu.swi22025.model.db.ChatRoom;
+import cz.osu.swi22025.model.MessageRepository;
+import cz.osu.swi22025.model.UserRepository;
+import cz.osu.swi22025.model.ChatRoomRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;

@@ -1,4 +1,4 @@
-package cz.osu.pesa.swi22025;
+package cz.osu.swi22025;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,3 +11,5 @@ class Swi22025ApplicationTests {
     }
 
 }
+
+

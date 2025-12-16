@@ -1,6 +1,6 @@
-package cz.osu.pesa.swi22025.model;
+package cz.osu.swi22025.model;
 
-import cz.osu.pesa.swi22025.model.db.ChatRoom;
+import cz.osu.swi22025.model.db.ChatRoom;
 import org.springframework.data.repository.CrudRepository;
 
 import java.util.List;

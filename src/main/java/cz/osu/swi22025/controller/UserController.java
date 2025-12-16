@@ -1,8 +1,8 @@
-package cz.osu.pesa.swi22025.controller;
+package cz.osu.swi22025.controller;
 
-import cz.osu.pesa.swi22025.model.json.PayloadMessage;
-import cz.osu.pesa.swi22025.model.json.SignupForm;
-import cz.osu.pesa.swi22025.service.UserService;
+import cz.osu.swi22025.model.json.PayloadMessage;
+import cz.osu.swi22025.model.json.SignupForm;
+import cz.osu.swi22025.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.CrossOrigin;

@@ -63,7 +63,6 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
     let payloadData: PayloadMessage = JSON.parse(payload.body);
     console.log("Message received from: " + payloadData.senderName);
     setMessages((prev: PayloadMessage[]) => [...prev, payloadData]);
-    pickupMessages();
   }
 
   function sendMessage() {

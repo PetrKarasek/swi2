@@ -1,4 +1,4 @@
-package cz.osu.pesa.swi22025.config;
+package cz.osu.swi22025.config;
 
 import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -30,7 +30,7 @@ public class RabbitMQConfig {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
 
         DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
-        typeMapper.setTrustedPackages("cz.osu.pesa.swi22025.model.json");
+        typeMapper.setTrustedPackages("cz.osu.swi22025.model.json");
 
         converter.setJavaTypeMapper(typeMapper);
         return converter;

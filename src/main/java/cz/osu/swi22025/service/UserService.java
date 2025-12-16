@@ -1,12 +1,12 @@
-package cz.osu.pesa.swi22025.service;
+package cz.osu.swi22025.service;
 
-import cz.osu.pesa.swi22025.config.RabbitMQConfig;
-import cz.osu.pesa.swi22025.model.ChatRoomRepository;
-import cz.osu.pesa.swi22025.model.UserRepository;
-import cz.osu.pesa.swi22025.model.db.ChatUser;
-import cz.osu.pesa.swi22025.model.MessageRepository;
-import cz.osu.pesa.swi22025.model.json.SignupForm;
-import cz.osu.pesa.swi22025.model.json.UserToken;
+import cz.osu.swi22025.config.RabbitMQConfig;
+import cz.osu.swi22025.model.ChatRoomRepository;
+import cz.osu.swi22025.model.UserRepository;
+import cz.osu.swi22025.model.db.ChatUser;
+import cz.osu.swi22025.model.MessageRepository;
+import cz.osu.swi22025.model.json.SignupForm;
+import cz.osu.swi22025.model.json.UserToken;
 import lombok.AllArgsConstructor;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;

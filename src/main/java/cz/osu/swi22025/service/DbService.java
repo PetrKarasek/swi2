@@ -1,10 +1,10 @@
-package cz.osu.pesa.swi22025.service;
+package cz.osu.swi22025.service;
 
-import cz.osu.pesa.swi22025.model.ChatRoomRepository;
-import cz.osu.pesa.swi22025.model.UserRepository;
-import cz.osu.pesa.swi22025.model.db.ChatRoom;
-import cz.osu.pesa.swi22025.model.db.ChatUser;
-import cz.osu.pesa.swi22025.model.db.Message;
+import cz.osu.swi22025.model.ChatRoomRepository;
+import cz.osu.swi22025.model.UserRepository;
+import cz.osu.swi22025.model.db.ChatRoom;
+import cz.osu.swi22025.model.db.ChatUser;
+import cz.osu.swi22025.model.db.Message;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
