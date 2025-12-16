@@ -120,10 +120,10 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <AppBar position="static">
+      <AppBar position="static" sx={{ background: "rgba(15,23,42,0.98)" }}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Chat Room - {props.user.username}
+            Hlavní místnost · {props.user.username}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="body2">
