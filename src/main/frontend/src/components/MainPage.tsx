@@ -60,9 +60,10 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
   };
 
   function onPublicMessageReceived(payload: any) {
-    let payloadData: PayloadMessage = JSON.parse(payload.body);
-    console.log("Message received from: " + payloadData.senderName);
-    setMessages((prev: PayloadMessage[]) => [...prev, payloadData]);
+    // Po doručení zprávy přes WebSocket jen vyzvedneme zprávy z fronty,
+    // aby se každá zpráva zobrazila přesně jednou.
+    console.log("WebSocket message received, fetching messages from queue...");
+    pickupMessages();
   }
 
   function sendMessage() {
