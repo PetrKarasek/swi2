@@ -11,16 +11,23 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { UserToken } from "../types";
 
 const SIGNUP_TOKEN_URL = "http://localhost:8081/signup";
+const LOGIN_TOKEN_URL = "http://localhost:8081/login";
 
-const Signup = () => {
+interface SignupProps {
+  setUserToken: (userToken: UserToken | null | string) => void;
+}
+
+const Signup: React.FC<SignupProps> = ({ setUserToken }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [successText, setSuccessText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
 
   async function signup(e: React.FormEvent) {
     e.preventDefault();
@@ -39,8 +46,17 @@ const Signup = () => {
 
     try {
       setIsSubmitting(true);
-      const response = await axios.post(SIGNUP_TOKEN_URL, userDTO);
-      setSuccessText(response.data || "Registrace proběhla úspěšně.");
+
+      // 1) Registrace uživatele
+      const signupResponse = await axios.post(SIGNUP_TOKEN_URL, userDTO);
+      setSuccessText(signupResponse.data || "Registrace proběhla úspěšně.");
+
+      // 2) Automatické přihlášení po úspěšné registraci
+      const loginResponse = await axios.post<UserToken>(LOGIN_TOKEN_URL, userDTO);
+      setUserToken(loginResponse.data);
+
+      // 3) Přesměrování na hlavní stránku (chat)
+      navigate("/");
     } catch (error: any) {
       try {
         const msg =
