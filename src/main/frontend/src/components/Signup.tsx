@@ -82,19 +82,19 @@ const Signup: React.FC<SignupProps> = ({ setUserToken }) => {
       }}
     >
       <Paper
-        elevation={8}
+        elevation={3}
         sx={{
           p: { xs: 3, md: 4 },
           borderRadius: 3,
           width: "100%",
-          backgroundColor: "#0f172a",
-          border: "1px solid rgba(148, 163, 184, 0.35)",
+          backgroundColor: "#ffffff",
+          border: "1px solid #e5e7eb",
         }}
       >
-        <Typography variant="h5" sx={{ mb: 1.5, fontWeight: 600 }}>
+        <Typography variant="h5" sx={{ mb: 1.5, fontWeight: 600, color: "#111827" }}>
           Vytvořit nový účet
         </Typography>
-        <Typography variant="body2" sx={{ mb: 3, opacity: 0.8 }}>
+        <Typography variant="body2" sx={{ mb: 3, opacity: 0.8, color: "#374151" }}>
           Registrace vytvoří uživatele ve společné databázi a automaticky jej
           přidá do hlavní veřejné chatovací místnosti.
         </Typography>

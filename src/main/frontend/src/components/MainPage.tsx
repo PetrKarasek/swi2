@@ -3,18 +3,78 @@ import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import axios from "axios";
-import { PayloadMessage, User, UserToken } from "../types";
+import { PayloadMessage, UserToken } from "../types";
 
 var stompClient: any = null;
 const PICKUP_URL = "http://localhost:8081/api/queue";
+const HISTORY_URL = "http://localhost:8081/api/history";
 
-const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | string) => void }) => {
+const PENDING_MESSAGES_KEY = "pendingMessages";
+
+const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserToken | null | string) => void }) => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<PayloadMessage[]>([]);
   const [connected, setConnected] = useState(false);
+  const [pendingMessages, setPendingMessages] = useState<PayloadMessage[]>([]);
+  const isLoggedIn = !!props.user;
 
   const stompClientRef = useRef<Client | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Load pending messages from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(PENDING_MESSAGES_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setPendingMessages(parsed);
+      } catch (e) {
+        console.error("Error parsing pending messages:", e);
+      }
+    }
+  }, []);
+
+  // Function to send pending messages when user logs in and WebSocket is connected
+  const sendPendingMessages = () => {
+    if (!isLoggedIn || !props.user) return;
+    
+    const stored = localStorage.getItem(PENDING_MESSAGES_KEY);
+    if (!stored) return;
+    
+    try {
+      const pending = JSON.parse(stored);
+      if (!Array.isArray(pending) || pending.length === 0) return;
+      
+      const client = stompClientRef.current;
+      if (client && client.connected) {
+        // Send all pending messages
+        pending.forEach((pendingMsg: PayloadMessage) => {
+          const payloadMessage: PayloadMessage = {
+            senderName: props.user!.username,
+            receiverChatRoomId: pendingMsg.receiverChatRoomId,
+            content: pendingMsg.content,
+            date: pendingMsg.date,
+          };
+          client.publish({
+            destination: "/app/message",
+            body: JSON.stringify(payloadMessage),
+          });
+        });
+        // Clear pending messages
+        localStorage.removeItem(PENDING_MESSAGES_KEY);
+        setPendingMessages([]);
+      }
+    } catch (e) {
+      console.error("Error sending pending messages:", e);
+    }
+  };
+
+  // When user logs in, try to send pending messages
+  useEffect(() => {
+    if (isLoggedIn && connected) {
+      sendPendingMessages();
+    }
+  }, [isLoggedIn, connected, props.user]);
 
   useEffect(() => {
     let sock = new SockJS("http://localhost:8081/ws");
@@ -26,6 +86,11 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
         console.log("Connected to WebSocket");
         setConnected(true);
         stompClient.subscribe("/chatroom/1", onPublicMessageReceived);
+        
+        // If user is logged in and we have pending messages, send them now
+        setTimeout(() => {
+          sendPendingMessages();
+        }, 500); // Small delay to ensure subscription is ready
       },
       onDisconnect: () => {
         console.log("Disconnected from WebSocket");
@@ -41,7 +106,12 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
     stompClientRef.current = stompClient;
     stompClient.activate();
 
-    pickupMessages();
+    // Nejprve načteme historii z databáze, pak případně zprávy z fronty (pro dobu, kdy byl uživatel odhlášen).
+    loadHistory().then(() => {
+      if (props.user) {
+        pickupMessages();
+      }
+    });
 
     return () => {
       if (stompClientRef.current) {
@@ -60,36 +130,64 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
   };
 
   function onPublicMessageReceived(payload: any) {
-    // Po doručení zprávy přes WebSocket jen vyzvedneme zprávy z fronty,
-    // aby se každá zpráva zobrazila přesně jednou.
-    console.log("WebSocket message received, fetching messages from queue...");
-    pickupMessages();
+    // Zprávy přijaté v reálném čase pouze přidáme do seznamu.
+    let payloadData: PayloadMessage = JSON.parse(payload.body);
+    console.log("Message received from: " + payloadData.senderName);
+    setMessages((prev: PayloadMessage[]) => [...prev, payloadData]);
+  }
+
+  async function loadHistory() {
+    try {
+      const params = new URLSearchParams([["chatRoomId", "1"]]);
+      const result = await axios.get<PayloadMessage[]>(HISTORY_URL, { params });
+      if (result.data) {
+        setMessages(result.data);
+      }
+    } catch (e) {
+      console.log("Error loading history:", e);
+    }
   }
 
   function sendMessage() {
     if (!message.trim()) return;
 
-    const client = stompClientRef.current;
-    if (client && client.connected) {
-      const payloadMessage: PayloadMessage = {
-        senderName: props.user.username,
+    const trimmedMessage = message.trim();
+    setMessage("");
+
+    if (isLoggedIn && props.user) {
+      // Logged in user: send immediately via WebSocket
+      const client = stompClientRef.current;
+      if (client && client.connected) {
+        const payloadMessage: PayloadMessage = {
+          senderName: props.user.username,
+          receiverChatRoomId: "1",
+          content: trimmedMessage,
+          date: new Date().toISOString(),
+        };
+
+        client.publish({
+          destination: "/app/message",
+          body: JSON.stringify(payloadMessage),
+        });
+      } else {
+        console.error("WebSocket not connected");
+      }
+    } else {
+      // Non-logged user: store in localStorage queue
+      const pendingMsg: PayloadMessage = {
+        senderName: "Guest",
         receiverChatRoomId: "1",
-        content: message.trim(),
+        content: trimmedMessage,
         date: new Date().toISOString(),
       };
-
-      client.publish({
-        destination: "/app/message",
-        body: JSON.stringify(payloadMessage),
-      });
-
-      setMessage("");
-    } else {
-      console.error("WebSocket not connected");
+      const updated = [...pendingMessages, pendingMsg];
+      setPendingMessages(updated);
+      localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updated));
     }
   }
 
   async function pickupMessages() {
+    if (!props.user) return;
     const params = new URLSearchParams([["userId", props.user.userId]]);
 
     try {
@@ -123,15 +221,17 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
       <AppBar position="static" sx={{ background: "rgba(15,23,42,0.98)" }}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Hlavní místnost · {props.user.username}
+            Hlavní místnost · {isLoggedIn ? props.user?.username : "Host"}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="body2">
               {connected ? "🟢 Connected" : "🔴 Disconnected"}
             </Typography>
-            <Button color="inherit" onClick={logout}>
-              Logout
-            </Button>
+            {isLoggedIn && (
+              <Button color="inherit" onClick={logout}>
+                Logout
+              </Button>
+            )}
           </Box>
         </Toolbar>
       </AppBar>
@@ -182,16 +282,23 @@ const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | 
           </List>
         </Paper>
 
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <TextField
-            fullWidth
-            label="Type your message here"
-            variant="outlined"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={!connected}
-          />
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+          <Box sx={{ flex: 1 }}>
+            <TextField
+              fullWidth
+              label={isLoggedIn ? "Type your message here" : pendingMessages.length > 0 ? `${pendingMessages.length} zpráv ve frontě - přihlas se pro odeslání` : "Napiš zprávu (bude ve frontě do přihlášení)"}
+              variant="outlined"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={!connected}
+            />
+            {pendingMessages.length > 0 && !isLoggedIn && (
+              <Typography variant="caption" sx={{ color: '#1976d2', mt: 0.5, display: 'block' }}>
+                {pendingMessages.length} zpráv čeká ve frontě. Přihlas se pro jejich odeslání.
+              </Typography>
+            )}
+          </Box>
           <Button 
             variant="contained" 
             onClick={sendMessage}

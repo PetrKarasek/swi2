@@ -2,6 +2,7 @@ import React from "react";
 import { Box, Container, Typography, Paper, Grid } from "@mui/material";
 import Login from "./Login";
 import MainPage from "./MainPage";
+import MainPagePreview from "./MainPagePreview";
 import { UserToken } from "../types";
 
 interface HomeProps {
@@ -18,6 +19,8 @@ const Home: React.FC<HomeProps> = (props) => {
         minHeight: "100vh",
         display: "flex",
         flexDirection: "column",
+        backgroundColor: "#f3f4f6",
+        color: "#111827",
       }}
     >
       {!isLoggedIn ? (
@@ -66,60 +69,73 @@ const Home: React.FC<HomeProps> = (props) => {
             }}
           >
             <Grid container spacing={4} alignItems="stretch">
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={5}>
                 <Typography
                   variant="h3"
                   sx={{
                     fontWeight: 700,
                     mb: 2,
                     lineHeight: 1.1,
+                    color: "#111827",
                   }}
                 >
                   Vstup do hlavní místnosti
                 </Typography>
                 <Typography
                   variant="h6"
-                  sx={{ mb: 3, maxWidth: 480, opacity: 0.9 }}
+                  sx={{ mb: 3, maxWidth: 480, opacity: 0.9, color: "#374151" }}
                 >
-                  Přihlas se jedním účtem a chatuj v hlavní veřejné místnosti se
-                  všemi ostatními uživateli. Zprávy pro odhlášené uživatele
-                  bezpečně čekají ve frontě.
+                  Po otevření aplikace vidíš hlavní veřejnou místnost. Zprávy
+                  mohou číst pouze přihlášení uživatelé, ale rozhraní místnosti
+                  je viditelné pro všechny.
                 </Typography>
                 <Paper
                   sx={{
                     p: 2.5,
-                    background:
-                      "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
                     borderRadius: 3,
-                    border: "1px solid rgba(255,255,255,0.18)",
+                    border: "1px solid #e5e7eb",
+                    backgroundColor: "#ffffff",
                   }}
                 >
-                  <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
+                  <Typography variant="subtitle1" sx={{ mb: 1.5, color: "#111827" }}>
                     Jak to funguje
                   </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
-                    • Webová aplikace (React) nad společnou databází
+                  <Typography variant="body2" sx={{ mb: 0.5, color: "#374151" }}>
+                    • Webová i desktopová aplikace nad společnou databází
                   </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
+                  <Typography variant="body2" sx={{ mb: 0.5, color: "#374151" }}>
                     • Jedna databáze uživatelů pro všechny klienty
                   </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    • Zprávy pro nepřihlášené uživatele se ukládají do fronty a
-                    doručí se po přihlášení
+                  <Typography variant="body2" sx={{ color: "#374151" }}>
+                    • Zprávy pro uživatele, kteří nejsou přihlášeni, zůstávají ve
+                    frontě a doručí se po přihlášení
                   </Typography>
                 </Paper>
+                <Box sx={{ mt: 3 }}>
+                  <Paper
+                    elevation={3}
+                    sx={{
+                      p: { xs: 2, md: 3 },
+                      borderRadius: 3,
+                      backgroundColor: "#ffffff",
+                      border: "1px solid #e5e7eb",
+                    }}
+                  >
+                    <Login setUserToken={props.setUserToken} />
+                  </Paper>
+                </Box>
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12} md={7}>
                 <Paper
-                  elevation={8}
+                  elevation={3}
                   sx={{
-                    p: { xs: 3, md: 4 },
+                    height: "100%",
                     borderRadius: 3,
-                    backgroundColor: "#0f172a",
-                    border: "1px solid rgba(148, 163, 184, 0.35)",
+                    overflow: "hidden",
+                    backgroundColor: "#f3f4f6",
                   }}
                 >
-                  <Login setUserToken={props.setUserToken} />
+                  <MainPagePreview />
                 </Paper>
               </Grid>
             </Grid>
