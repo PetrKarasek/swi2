@@ -1,1 +1,18 @@
-spring.application.name: SWI22025
+spring:
+  application:
+    name: SWI22025
+  rabbitmq:
+    host: localhost
+    virtual-host: /
+    username: guest
+    password: guest
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+server:
+  port: 8081
