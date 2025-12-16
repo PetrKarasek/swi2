@@ -16,6 +16,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.Date;
@@ -42,12 +43,14 @@ public class ChatController {
 
     // REST endpoint for sending message from non-WebSocket clients (e.g. desktop)
     @PostMapping("/api/message")
+    @ResponseBody
     public PayloadMessage postPublicMessage(@RequestBody PayloadMessage message) {
         return handlePublicMessage(message);
     }
 
     // History of messages for a given chat room, loaded from the database.
     @GetMapping("/api/history")
+    @ResponseBody
     public List<PayloadMessage> getHistory(@RequestParam String chatRoomId) {
         Integer id = Integer.valueOf(chatRoomId);
         return messageRepository.findByChatRoom_ChatIdOrderBySendTimeAsc(id)
