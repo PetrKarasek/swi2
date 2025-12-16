@@ -1,8 +1,14 @@
 import React from 'react'
 import Login from './Login'
 import MainPage from './MainPage'
+import { UserToken } from '../types';
 
-const Home = (props: any) => {
+interface HomeProps {
+  user: UserToken | null;
+  setUserToken: (userToken: UserToken | null | string) => void;
+}
+
+const Home: React.FC<HomeProps> = (props) => {
   return (
     <div>
         {!props.user ? (

@@ -1,33 +1,40 @@
-import { Box, Button, TextField } from "@mui/material";
+import { Box, Button, TextField, Typography, Paper, List, ListItem, AppBar, Toolbar } from "@mui/material";
 import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import axios from "axios";
+import { PayloadMessage, User, UserToken } from "../types";
 
 var stompClient: any = null;
 const PICKUP_URL = "http://localhost:8081/api/queue";
 
-const MainPage = (props: any) => {
+const MainPage = (props: { user: User; setUserToken: (token: UserToken | null | string) => void }) => {
   const [message, setMessage] = useState("");
-  const [privateChats, setPrivateChats] = useState<
-    Map<string, PayloadMessage[]>
-  >(new Map());
+  const [messages, setMessages] = useState<PayloadMessage[]>([]);
+  const [connected, setConnected] = useState(false);
 
   const stompClientRef = useRef<Client | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let sock = new SockJS("http://localhost:8081/ws");
     stompClient = new Client({
       webSocketFactory: () => sock,
       reconnectDelay: 5000,
-      debug: (str) => console.log(str),
+      debug: (str: string) => console.log(str),
       onConnect: () => {
         console.log("Connected to WebSocket");
+        setConnected(true);
         stompClient.subscribe("/chatroom/1", onPublicMessageReceived);
       },
-      onStompError: (frame) => {
+      onDisconnect: () => {
+        console.log("Disconnected from WebSocket");
+        setConnected(false);
+      },
+      onStompError: (frame: any) => {
         console.error("Broker reported error: " + frame.headers["message"]);
         console.error("Additional details: " + frame.body);
+        setConnected(false);
       },
     });
 
@@ -37,7 +44,6 @@ const MainPage = (props: any) => {
     pickupMessages();
 
     return () => {
-      // Disconnect when components unmount
       if (stompClientRef.current) {
         stompClientRef.current.deactivate();
         stompClientRef.current = null;
@@ -45,21 +51,31 @@ const MainPage = (props: any) => {
     };
   }, []);
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   function onPublicMessageReceived(payload: any) {
-    let payloadData = JSON.parse(payload.body);
+    let payloadData: PayloadMessage = JSON.parse(payload.body);
     console.log("Message received from: " + payloadData.senderName);
+    setMessages((prev: PayloadMessage[]) => [...prev, payloadData]);
     pickupMessages();
   }
 
   function sendMessage() {
-    // Send message to backend through WebSocket
+    if (!message.trim()) return;
+
     const client = stompClientRef.current;
     if (client && client.connected) {
-      const payloadMessage = {
+      const payloadMessage: PayloadMessage = {
         senderName: props.user.username,
-        receiverChatRoomId: 1,
-        content: message,
-        date: new Date(),
+        receiverChatRoomId: "1",
+        content: message.trim(),
+        date: new Date().toISOString(),
       };
 
       client.publish({
@@ -68,6 +84,8 @@ const MainPage = (props: any) => {
       });
 
       setMessage("");
+    } else {
+      console.error("WebSocket not connected");
     }
   }
 
@@ -76,109 +94,116 @@ const MainPage = (props: any) => {
 
     try {
       const result = await axios.get<PayloadMessage[]>(PICKUP_URL, { params });
-
-      result.data.forEach((msg) => {
-        const chatId = msg.receiverChatRoomId;
-        console.log("Chat id is: " + chatId);
-
-        if (!privateChats.has(chatId)) {
-          privateChats.set(chatId, []);
-          console.log("Creating new private chat");
-        }
-
-        console.log("Adding message: " + msg.content);
-        privateChats.get(chatId)!.push(msg);
-
-        setPrivateChats(new Map(privateChats));
-      });
+      
+      if (result.data && result.data.length > 0) {
+        setMessages((prev: PayloadMessage[]) => [...prev, ...result.data]);
+      }
     } catch (e) {
-      console.log("Error", e);
+      console.log("Error picking up messages:", e);
     }
   }
 
-  function logout(e: any) {
-    // Unsubscribe from all active subscriptions (if needed)
+  function logout() {
     if (stompClientRef.current && stompClientRef.current.active) {
-      stompClientRef.current.deactivate(); // disconnect
+      stompClientRef.current.deactivate();
       console.log("Disconnected from WebSocket");
     }
     props.setUserToken("");
   }
 
-  /*
-<Box>
-              {[...props.privateChats.get(props.activeChat).map((msg, index) => (
-                <Box key={index} sx={{ paddingBottom: '10px', width: '100%', overflow: 'auto' }}>
-                  {msg.chatUser.userId === props.user.userId ? (
-                    <Box sx={{ padding: '10px', float: 'right', textAlign: 'left', backgroundColor: '#057eff', borderRadius: '15px', maxWidth: '75%' }}>
-                      {msg.content}
-                    </Box>
-                  ) : (
-                    <Box sx={{ padding: '10px', float: 'left', textAlign: 'left', backgroundColor: '#39393c', borderRadius: '15px', maxWidth: '75%' }}>
-                      {msg.content}
-                    </Box>
-                  )}
-                </Box>
-*/
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
   return (
-    <div>
-      <h2>Hello {props.user.username}</h2>
-      <TextField
-        label="Type your message here"
-        variant="outlined"
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
-      />
-      <Button variant="contained" onClick={sendMessage}>
-        Send
-      </Button>
-      <Box>
-        {(privateChats.get("1") ?? []).map((msg, index) => (
-          <Box key={index}>
-            {msg.senderName === props.user.username ? (
-              <Box
-                sx={{
-                  padding: "10px",
-                  marginBottom: '5px',
-                  textAlign: "left",
-                  backgroundColor: "#057eff",
-                  borderRadius: "15px",
-                  maxWidth: "75%",
-                }}
-              >
-                {msg.content}
-              </Box>
-            ) : (
-              <Box
-                sx={{
-                  padding: "10px",
-                  marginBottom: '5px',
-                  textAlign: "left",
-                  backgroundColor: "#39393c",
-                  borderRadius: "15px",
-                  maxWidth: "75%",
-                }}
-              >
-                {msg.content}
-              </Box>
-            )}
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <AppBar position="static">
+        <Toolbar>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            Chat Room - {props.user.username}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2">
+              {connected ? "🟢 Connected" : "🔴 Disconnected"}
+            </Typography>
+            <Button color="inherit" onClick={logout}>
+              Logout
+            </Button>
           </Box>
-        ))}
+        </Toolbar>
+      </AppBar>
+
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2 }}>
+        <Paper 
+          sx={{ 
+            flex: 1, 
+            p: 2, 
+            mb: 2, 
+            overflow: 'auto',
+            backgroundColor: '#f5f5f5'
+          }}
+        >
+          <List>
+            {messages.map((msg: PayloadMessage, index: number) => (
+              <ListItem key={index} sx={{ p: 0, mb: 1 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: msg.senderName === props.user.username ? 'flex-end' : 'flex-start',
+                    width: '100%'
+                  }}
+                >
+                  <Box
+                    sx={{
+                      maxWidth: '70%',
+                      p: 2,
+                      borderRadius: 2,
+                      backgroundColor: msg.senderName === props.user.username ? '#1976d2' : '#e0e0e0',
+                      color: msg.senderName === props.user.username ? 'white' : 'black'
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+                      {msg.senderName}
+                    </Typography>
+                    <Typography variant="body1">
+                      {msg.content}
+                    </Typography>
+                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.7 }}>
+                      {new Date(msg.date).toLocaleTimeString()}
+                    </Typography>
+                  </Box>
+                </Box>
+              </ListItem>
+            ))}
+            <div ref={messagesEndRef} />
+          </List>
+        </Paper>
+
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <TextField
+            fullWidth
+            label="Type your message here"
+            variant="outlined"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={!connected}
+          />
+          <Button 
+            variant="contained" 
+            onClick={sendMessage}
+            disabled={!connected || !message.trim()}
+            sx={{ minWidth: 80 }}
+          >
+            Send
+          </Button>
+        </Box>
       </Box>
-      <Button variant="contained" type="submit" onClick={logout}>
-        Log Out
-      </Button>
-    </div>
+    </Box>
   );
 };
 
 export default MainPage;
-
-export interface PayloadMessage {
-  senderName: string;
-  receiverName: string;
-  receiverChatRoomId: string;
-  content: string;
-  date: string;
-}

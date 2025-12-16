@@ -3,19 +3,30 @@ import './App.css'
 import { Route, Routes } from 'react-router-dom';
 import Home from './components/Home';
 import Signup from './components/Signup';
+import { UserToken } from './types';
 
 function App() {
+  const [user, setUser] = useState<UserToken | null>(getUserToken());
 
-  const [user, setUser] = useState(getUserToken());
-
-  function getUserToken() {
-    let userToken = JSON.parse(localStorage.getItem('userToken') || '""');
-    return userToken;
+  function getUserToken(): UserToken | null {
+    const userTokenStr = localStorage.getItem('userToken');
+    if (!userTokenStr || userTokenStr === '""') return null;
+    
+    try {
+      return JSON.parse(userTokenStr);
+    } catch {
+      return null;
+    }
   }
 
-  function setUserToken(userToken: any) {
-    localStorage.setItem('userToken', JSON.stringify(userToken));
-    setUser(userToken);
+  function setUserToken(userToken: UserToken | null | string) {
+    if (typeof userToken === 'string' || userToken === null) {
+      localStorage.setItem('userToken', userToken);
+      setUser(null);
+    } else {
+      localStorage.setItem('userToken', JSON.stringify(userToken));
+      setUser(userToken);
+    }
   }
 
   return (
