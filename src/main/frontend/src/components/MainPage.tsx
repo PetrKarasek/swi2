@@ -242,14 +242,15 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2 }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, position: 'relative', overflow: 'hidden' }}>
         <Paper 
           sx={{ 
             flex: 1, 
             p: 2, 
             mb: 2, 
             overflow: 'auto',
-            backgroundColor: '#f5f5f5'
+            backgroundColor: '#f5f5f5',
+            maxHeight: 'calc(100% - 80px)'
           }}
         >
           <List>
@@ -288,7 +289,16 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
           </List>
         </Paper>
 
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+        <Box sx={{ 
+          position: 'absolute', 
+          bottom: 0, 
+          left: 0, 
+          right: 0, 
+          p: 2, 
+          backgroundColor: 'white',
+          borderTop: '1px solid #e0e0e0'
+        }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
           <Box sx={{ flex: 1 }}>
             <TextField
               fullWidth
@@ -315,6 +325,7 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
             Send
           </Button>
         </Box>
+      </Box>
       </Box>
     </Box>
   );

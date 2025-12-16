@@ -82,7 +82,7 @@ const MainPagePreview: React.FC = () => {
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, backgroundColor: '#f3f4f6' }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, backgroundColor: '#f3f4f6', position: 'relative', overflow: 'hidden' }}>
         <Paper
           sx={{
             flex: 1,
@@ -90,6 +90,7 @@ const MainPagePreview: React.FC = () => {
             mb: 2,
             overflow: 'auto',
             backgroundColor: '#ffffff',
+            maxHeight: 'calc(100% - 80px)'
           }}
         >
           <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
@@ -131,7 +132,16 @@ const MainPagePreview: React.FC = () => {
           </List>
         </Paper>
 
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ 
+          position: 'absolute', 
+          bottom: 0, 
+          left: 0, 
+          right: 0, 
+          p: 2, 
+          backgroundColor: 'white',
+          borderTop: '1px solid #e0e0e0'
+        }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
           <TextField
             fullWidth
             label={pendingMessages.length > 0 ? `${pendingMessages.length} zpráv ve frontě - přihlas se pro odeslání` : "Napiš zprávu (bude ve frontě do přihlášení)"}
@@ -150,6 +160,7 @@ const MainPagePreview: React.FC = () => {
             Send
           </Button>
         </Box>
+      </Box>
       </Box>
     </Box>
   );
