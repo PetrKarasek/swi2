@@ -21,7 +21,7 @@ function App() {
 
   function setUserToken(userToken: UserToken | null | string) {
     if (typeof userToken === 'string' || userToken === null) {
-      localStorage.setItem('userToken', userToken);
+      localStorage.setItem('userToken', userToken || '');
       setUser(null);
     } else {
       localStorage.setItem('userToken', JSON.stringify(userToken));

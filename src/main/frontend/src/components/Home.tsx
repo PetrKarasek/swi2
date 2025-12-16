@@ -69,7 +69,7 @@ const Home: React.FC<HomeProps> = (props) => {
             }}
           >
             <Grid container spacing={4} alignItems="stretch">
-              <Grid item xs={12} md={5}>
+              <Grid size={{ xs: 12, md: 5 }}>
                 <Typography
                   variant="h3"
                   sx={{
@@ -125,7 +125,7 @@ const Home: React.FC<HomeProps> = (props) => {
                   </Paper>
                 </Box>
               </Grid>
-              <Grid item xs={12} md={7}>
+              <Grid size={{ xs: 12, md: 7 }}>
                 <Paper
                   elevation={3}
                   sx={{

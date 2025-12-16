@@ -210,10 +210,16 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
   }
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    console.log('Key pressed:', e.key);
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
+  };
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('Message change:', e.target.value);
+    setMessage(e.target.value);
   };
 
   return (
@@ -252,7 +258,7 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
                 <Box
                   sx={{
                     display: 'flex',
-                    justifyContent: msg.senderName === props.user.username ? 'flex-end' : 'flex-start',
+                    justifyContent: msg.senderName === props.user?.username ? 'flex-end' : 'flex-start',
                     width: '100%'
                   }}
                 >
@@ -261,8 +267,8 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
                       maxWidth: '70%',
                       p: 2,
                       borderRadius: 2,
-                      backgroundColor: msg.senderName === props.user.username ? '#1976d2' : '#e0e0e0',
-                      color: msg.senderName === props.user.username ? 'white' : 'black'
+                      backgroundColor: msg.senderName === props.user?.username ? '#1976d2' : '#e0e0e0',
+                      color: msg.senderName === props.user?.username ? 'white' : 'black'
                     }}
                   >
                     <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
@@ -289,9 +295,10 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
               label={isLoggedIn ? "Type your message here" : pendingMessages.length > 0 ? `${pendingMessages.length} zpráv ve frontě - přihlas se pro odeslání` : "Napiš zprávu (bude ve frontě do přihlášení)"}
               variant="outlined"
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={handleMessageChange}
               onKeyPress={handleKeyPress}
-              disabled={!connected}
+              disabled={false}
+              inputProps={{ style: { pointerEvents: 'auto' } }}
             />
             {pendingMessages.length > 0 && !isLoggedIn && (
               <Typography variant="caption" sx={{ color: '#1976d2', mt: 0.5, display: 'block' }}>
@@ -302,7 +309,7 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
           <Button 
             variant="contained" 
             onClick={sendMessage}
-            disabled={!connected || !message.trim()}
+            disabled={!message.trim()}
             sx={{ minWidth: 80 }}
           >
             Send

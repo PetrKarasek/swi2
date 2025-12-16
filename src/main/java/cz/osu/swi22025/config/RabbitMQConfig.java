@@ -11,17 +11,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-// @EnableRabbit
+@EnableRabbit
 @Configuration
 public class RabbitMQConfig {
-    // @Value("${spring.rabbitmq.host}")
-    // private String host;
-    // @Value("${spring.rabbitmq.virtual-host}")
-    // private String virtualHost;
-    // @Value("${spring.rabbitmq.username}")
-    // private String username;
-    // @Value("${spring.rabbitmq.password}")
-    // private String password;
+    @Value("${spring.rabbitmq.host}")
+    private String host;
+    @Value("${spring.rabbitmq.virtual-host}")
+    private String virtualHost;
+    @Value("${spring.rabbitmq.username}")
+    private String username;
+    @Value("${spring.rabbitmq.password}")
+    private String password;
 
     public static final String CHATROOM_EXCHANGE = "chatroom.exchange";
 

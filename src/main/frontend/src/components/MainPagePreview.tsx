@@ -1,6 +1,8 @@
 import { Box, Button, TextField, Typography, Paper, List, ListItem, AppBar, Toolbar } from "@mui/material";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { PayloadMessage } from "../types";
+
+const PENDING_MESSAGES_KEY = "pendingMessages";
 
 // Simple static preview of the main room for users who are not logged in.
 // They can see the layout but not the real messages.
@@ -21,6 +23,52 @@ const demoMessages: PayloadMessage[] = [
 ];
 
 const MainPagePreview: React.FC = () => {
+  const [message, setMessage] = useState("");
+  const [pendingMessages, setPendingMessages] = useState<PayloadMessage[]>([]);
+
+  // Load pending messages from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(PENDING_MESSAGES_KEY);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setPendingMessages(parsed);
+      } catch (e) {
+        console.error("Error parsing pending messages:", e);
+      }
+    }
+  }, []);
+
+  const sendMessage = () => {
+    if (!message.trim()) return;
+
+    const newMessage: PayloadMessage = {
+      senderName: "Guest",
+      receiverChatRoomId: "1",
+      content: message.trim(),
+      date: new Date().toISOString(),
+    };
+
+    // Add to pending messages
+    const updatedPending = [...pendingMessages, newMessage];
+    setPendingMessages(updatedPending);
+    
+    // Save to localStorage
+    localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updatedPending));
+    
+    // Clear input
+    setMessage("");
+    
+    console.log("Message queued for later:", newMessage);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="static" sx={{ background: "#1976d2" }}>
@@ -86,13 +134,17 @@ const MainPagePreview: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
             fullWidth
-            label="Přihlas se, aby bylo možné odesílat zprávy"
+            label={pendingMessages.length > 0 ? `${pendingMessages.length} zpráv ve frontě - přihlas se pro odeslání` : "Napiš zprávu (bude ve frontě do přihlášení)"}
             variant="outlined"
-            disabled
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={false}
           />
           <Button
             variant="contained"
-            disabled
+            disabled={!message.trim()}
+            onClick={sendMessage}
             sx={{ minWidth: 80 }}
           >
             Send
