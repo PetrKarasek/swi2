@@ -86,11 +86,6 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
         console.log("Connected to WebSocket");
         setConnected(true);
         stompClient.subscribe("/chatroom/1", onPublicMessageReceived);
-        
-        // If user is logged in and we have pending messages, send them now
-        setTimeout(() => {
-          sendPendingMessages();
-        }, 500); // Small delay to ensure subscription is ready
       },
       onDisconnect: () => {
         console.log("Disconnected from WebSocket");
@@ -180,9 +175,11 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
         content: trimmedMessage,
         date: new Date().toISOString(),
       };
-      const updated = [...pendingMessages, pendingMsg];
-      setPendingMessages(updated);
-      localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updated));
+      setPendingMessages((prev) => {
+        const updated = [...prev, pendingMsg];
+        localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updated));
+        return updated;
+      });
     }
   }
 

@@ -16,6 +16,18 @@ public class DesktopApp extends Application {
         primaryStage.setTitle("SWI2 Chat Desktop");
 
         LoginView loginView = new LoginView(client, userToken -> {
+
+            // ✅ TADY: po loginu odešli pending zprávy z host módu
+            PendingStore store = new PendingStore();
+            var pending = store.load();
+            for (var p : pending) {
+                try {
+                    client.sendMessage(userToken, p.getContent());
+                } catch (Exception ignored) {}
+            }
+            store.clear();
+            // ✅ KONEC
+
             // After successful login, show main chat view (main room)
             ChatView chatView = new ChatView(client, userToken);
             primaryStage.setScene(new Scene(chatView, 800, 600));
