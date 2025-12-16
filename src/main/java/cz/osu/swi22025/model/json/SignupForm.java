@@ -1,4 +1,4 @@
-package cz.osu.pesa.swi22025.model.json;
+package cz.osu.swi22025.model.json;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

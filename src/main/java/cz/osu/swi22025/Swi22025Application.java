@@ -1,7 +1,7 @@
-package cz.osu.pesa.swi22025;
+package cz.osu.swi22025;
 
-import cz.osu.pesa.swi22025.model.ChatRoomRepository;
-import cz.osu.pesa.swi22025.model.db.ChatRoom;
+import cz.osu.swi22025.model.ChatRoomRepository;
+import cz.osu.swi22025.model.db.ChatRoom;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;

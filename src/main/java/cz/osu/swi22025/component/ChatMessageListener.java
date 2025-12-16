@@ -1,4 +1,4 @@
-package cz.osu.pesa.swi22025.component;
+package cz.osu.swi22025.component;
 
 import org.springframework.amqp.rabbit.listener.MessageListenerContainer;
 import org.springframework.amqp.rabbit.listener.RabbitListenerContainerFactory;

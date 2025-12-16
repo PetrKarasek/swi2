@@ -1,4 +1,4 @@
-package cz.osu.pesa.swi22025.config;
+package cz.osu.swi22025.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;

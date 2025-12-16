@@ -1,1 +1,27 @@
-spring.application.name: SWI22025
+spring:
+  application:
+    name: SWI22025
+  # rabbitmq:
+  #   host: localhost
+  #   port: 5672
+  #   username: guest
+  #   password: guest
+  #   virtual-host: /
+  #   connection-timeout: 15000
+  #   requested-heartbeat: 30
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  h2:
+    console:
+      enabled: true
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+server:
+  port: 8080

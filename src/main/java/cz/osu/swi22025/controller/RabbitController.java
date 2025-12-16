@@ -1,6 +1,6 @@
-package cz.osu.pesa.swi22025.controller;
+package cz.osu.swi22025.controller;
 
-import cz.osu.pesa.swi22025.model.json.PayloadMessage;
+import cz.osu.swi22025.model.json.PayloadMessage;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
