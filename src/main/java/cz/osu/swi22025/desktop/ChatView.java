@@ -117,10 +117,11 @@ public class ChatView extends BorderPane {
     private void appendMessage(PayloadMessage msg) {
         String time = "";
         try {
-            time = " [" + ZonedDateTime.parse(msg.getDate())
-                    .format(DateTimeFormatter.ofPattern("HH:mm:ss")) + "]";
-        } catch (Exception ignored) {
-        }
+            var zdt = java.time.Instant.parse(msg.getDate())
+                    .atZone(java.time.ZoneId.systemDefault());
+            time = " [" + zdt.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")) + "]";
+        } catch (Exception ignored) {}
+
 
         messagesArea.appendText(
                 msg.getSenderName() + time + ": " + msg.getContent() + System.lineSeparator()

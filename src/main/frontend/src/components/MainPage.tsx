@@ -240,9 +240,11 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
         content: trimmedMessage,
         date: new Date().toISOString(),
       };
-      const updated = [...pendingMessages, pendingMsg];
-      setPendingMessages(updated);
-      localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updated));
+      setPendingMessages((prev) => {
+        const updated = [...prev, pendingMsg];
+        localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updated));
+        return updated;
+      });
     }
   }
 
