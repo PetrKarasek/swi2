@@ -36,41 +36,69 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
       try {
         const parsed = JSON.parse(stored);
         setPendingMessages(parsed);
+        // Show pending messages immediately in UI for non-logged users
+        if (!isLoggedIn) {
+          setMessages(parsed);
+          console.log("Loaded pending messages to UI:", parsed.length);
+        }
       } catch (e) {
         console.error("Error parsing pending messages:", e);
       }
     }
-  }, []);
+  }, [isLoggedIn]);
 
   // Function to send pending messages when user logs in and WebSocket is connected
   const sendPendingMessages = () => {
-    if (!isLoggedIn || !props.user) return;
+    console.log("sendPendingMessages called, isLoggedIn:", isLoggedIn, "user:", !!props.user);
+    if (!isLoggedIn || !props.user) {
+      console.log("Cannot send pending messages - not logged in");
+      return;
+    }
     
     const stored = localStorage.getItem(PENDING_MESSAGES_KEY);
-    if (!stored) return;
+    if (!stored) {
+      console.log("No pending messages found in storage");
+      return;
+    }
     
     try {
       const pending = JSON.parse(stored);
-      if (!Array.isArray(pending) || pending.length === 0) return;
+      console.log("Found pending messages:", pending.length);
+      if (!Array.isArray(pending) || pending.length === 0) {
+        console.log("No pending messages to send");
+        return;
+      }
       
       const client = stompClientRef.current;
       if (client && client.connected) {
-        // Send all pending messages
-        pending.forEach((pendingMsg: PayloadMessage) => {
-          const payloadMessage: PayloadMessage = {
+        console.log("WebSocket is connected, sending pending messages...");
+        pending.forEach((msg: PayloadMessage, index: number) => {
+          // Update sender to current user
+          const updatedMsg = {
+            ...msg,
             senderName: props.user!.username,
-            receiverChatRoomId: pendingMsg.receiverChatRoomId,
-            content: pendingMsg.content,
-            date: pendingMsg.date,
+            date: new Date().toISOString() // Update timestamp
           };
+          
+          console.log(`Sending pending message ${index + 1}:`, updatedMsg);
           client.publish({
             destination: "/app/message",
-            body: JSON.stringify(payloadMessage),
+            body: JSON.stringify(updatedMsg),
+          });
+          
+          // Add message to local state immediately
+          setMessages((prev) => {
+            console.log("Adding sent pending message to local state");
+            return [...prev, updatedMsg];
           });
         });
-        // Clear pending messages
+        
+        // Clear pending messages after sending
         localStorage.removeItem(PENDING_MESSAGES_KEY);
         setPendingMessages([]);
+        console.log("Pending messages sent and cleared");
+      } else {
+        console.log("WebSocket not connected, cannot send pending messages");
       }
     } catch (e) {
       console.error("Error sending pending messages:", e);
@@ -95,7 +123,7 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
 
   useEffect(() => {
     let sock = new SockJS("http://localhost:8081/ws");
-    stompClient = new Client({
+    let stompClient = new Client({
       webSocketFactory: () => sock,
       reconnectDelay: 5000,
       debug: (str: string) => console.log(str),
@@ -105,9 +133,42 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
         console.log("Attempting to subscribe to /chatroom/1");
         const subscription = stompClient.subscribe("/chatroom/1", (message: any) => {
           console.log("Received message on /chatroom/1:", message);
-          onPublicMessageReceived(message);
+          try {
+            const payloadData: PayloadMessage = JSON.parse(message.body);
+            console.log("Message received from: " + payloadData.senderName);
+            console.log("Full message data:", payloadData);
+            
+            // Use functional update to avoid closure issues
+            setMessages((prev: PayloadMessage[]) => {
+              console.log("Adding message to existing messages:", prev.length);
+              
+              // Check if this is a duplicate message (sender receiving their own message)
+              // But don't check for pending messages that were just sent
+              const isDuplicate = prev.length > 0 && 
+                prev[prev.length - 1].senderName === payloadData.senderName &&
+                prev[prev.length - 1].content === payloadData.content &&
+                Math.abs(new Date(prev[prev.length - 1].date).getTime() - new Date(payloadData.date).getTime()) < 1000; // Only check duplicates within 1 second
+              
+              if (isDuplicate) {
+                console.log("Skipping duplicate message from:", payloadData.senderName);
+                return prev;
+              }
+              
+              const newMessages = [...prev, payloadData];
+              console.log("New messages count:", newMessages.length);
+              return newMessages;
+            });
+          } catch (error) {
+            console.error("Error parsing message:", error);
+          }
         });
         console.log("Successfully subscribed to /chatroom/1");
+        
+        // Send pending messages when WebSocket connects and user is logged in
+        if (isLoggedIn && props.user) {
+          console.log("WebSocket connected, sending pending messages...");
+          sendPendingMessages();
+        }
         
         // If user is logged in and we have pending messages, send them now
         setTimeout(() => {
@@ -147,19 +208,15 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    // Force re-render when messages change
+    if (messages.length > 0) {
+      console.log("Messages updated, count:", messages.length);
+    }
+  }, [messages]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const onPublicMessageReceived = (payload: any) => {
-    let payloadData: PayloadMessage = JSON.parse(payload.body);
-    console.log("Message received from: " + payloadData.senderName);
-    console.log("Full message data:", payloadData);
-    console.log("Current messages count:", messages.length);
-    setMessages((prev: PayloadMessage[]) => {
-      console.log("Adding message to existing messages:", prev.length);
-      return [...prev, payloadData];
-    });
   };
 
   async function loadUsers() {
@@ -192,6 +249,7 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
   }
 
   async function loadHistory() {
+    console.log("loadHistory called, isLoggedIn:", isLoggedIn);
     try {
       const params = new URLSearchParams([
         ["chatRoomId", "1"],
@@ -199,11 +257,50 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
       ]);
       const result = await axios.get<PayloadMessage[]>(HISTORY_URL, { params });
       if (result.data) {
-        setMessages(result.data);
-        console.log("Loaded message history:", result.data);
+        console.log("History loaded from server:", result.data.length);
+        // If not logged in, combine history with pending messages
+        if (!isLoggedIn) {
+          const stored = localStorage.getItem(PENDING_MESSAGES_KEY);
+          let pendingMessages: PayloadMessage[] = [];
+          if (stored) {
+            try {
+              pendingMessages = JSON.parse(stored);
+              console.log("Found pending messages in storage:", pendingMessages.length);
+            } catch (e) {
+              console.error("Error parsing pending messages:", e);
+            }
+          }
+          
+          // Combine history and pending messages, but don't override existing messages
+          setMessages((prevMessages) => {
+            console.log("Current messages before combining:", prevMessages.length);
+            const existingPending = prevMessages.filter(msg => msg.senderName === "Guest");
+            console.log("Existing pending messages:", existingPending.length);
+            const allMessages = [...result.data, ...existingPending];
+            console.log("Combined history + pending messages:", allMessages.length);
+            return allMessages;
+          });
+        } else {
+          // Logged in users only see history
+          setMessages(result.data);
+          console.log("Loaded message history for logged user:", result.data.length);
+        }
       }
     } catch (e) {
       console.log("Error loading history:", e);
+      // If error and not logged in, try to show pending messages
+      if (!isLoggedIn) {
+        const stored = localStorage.getItem(PENDING_MESSAGES_KEY);
+        if (stored) {
+          try {
+            const pendingMessages = JSON.parse(stored);
+            setMessages(pendingMessages);
+            console.log("Showing pending messages due to history error:", pendingMessages.length);
+          } catch (e) {
+            console.error("Error parsing pending messages:", e);
+          }
+        }
+      }
     }
   }
 
@@ -224,6 +321,12 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
           date: new Date().toISOString(),
         };
 
+        // Add message to local state immediately for instant feedback
+        setMessages((prev) => {
+          console.log("Adding own message to local state:", prev.length);
+          return [...prev, payloadMessage];
+        });
+
         client.publish({
           destination: "/app/message",
           body: JSON.stringify(payloadMessage),
@@ -233,17 +336,27 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
         console.error("WebSocket not connected");
       }
     } else {
-      // Non-logged user: store in localStorage queue
+      // Non-logged user: store in localStorage queue and show immediately
       const pendingMsg: PayloadMessage = {
         senderName: "Guest",
         receiverChatRoomId: "1",
         content: trimmedMessage,
         date: new Date().toISOString(),
       };
+      
+      // Add to pending messages queue
       setPendingMessages((prev) => {
         const updated = [...prev, pendingMsg];
         localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updated));
         return updated;
+      });
+      
+      // Show message immediately in UI
+      setMessages((prev) => {
+        console.log("Adding queued message to UI:", prev.length);
+        const newMessages = [...prev, pendingMsg];
+        console.log("New messages count after adding:", newMessages.length);
+        return newMessages;
       });
     }
   }

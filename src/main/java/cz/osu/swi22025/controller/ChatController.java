@@ -56,7 +56,11 @@ public class ChatController {
 
     @MessageMapping("/message") // url: /app/message (WebSocket)
     public PayloadMessage receivePublicMessage(@Payload PayloadMessage message) {
-        System.out.println("Received public message: " + message.getContent() + " from " + message.getSenderName());
+        System.out.println("=== WebSocket Message Received ===");
+        System.out.println("Content: " + message.getContent());
+        System.out.println("Sender: " + message.getSenderName());
+        System.out.println("Room ID: " + message.getReceiverChatRoomId());
+        System.out.println("================================");
         return handlePublicMessage(message);
     }
 

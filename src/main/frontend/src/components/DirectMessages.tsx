@@ -19,6 +19,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { Client } from "@stomp/stompjs";
 import axios from "axios";
 import { PayloadMessage, UserToken } from "../types";
+import Avatar from "./Avatar";
 
 const DIRECT_HISTORY_URL = "http://localhost:8081/api/direct-history";
 const UNREAD_MESSAGES_URL = "http://localhost:8081/api/unread-messages";
@@ -38,6 +39,7 @@ const DirectMessages = ({ user, stompClient, allUsers }: DirectMessagesProps) =>
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isUserSelectOpen, setIsUserSelectOpen] = useState(false);
   const [users, setUsers] = useState<string[]>([]);
+  const [userAvatars, setUserAvatars] = useState<{[key: string]: string}>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,6 +68,63 @@ const DirectMessages = ({ user, stompClient, allUsers }: DirectMessagesProps) =>
     console.log("DirectMessages - allUsers updated:", allUsers);
   }, [allUsers]);
 
+  // Load avatars for all users
+  useEffect(() => {
+    const loadUserAvatars = async () => {
+      const avatars: {[key: string]: string} = {};
+      
+      for (const username of users) {
+        try {
+          const response = await axios.get(`http://localhost:8081/api/user/${username}`);
+          if (response.data && response.data.avatarUrl) {
+            avatars[username] = response.data.avatarUrl;
+          } else {
+            avatars[username] = "http://localhost:8081/avatars/cat.png";
+          }
+        } catch (e) {
+          console.log(`Error loading avatar for ${username}:`, e);
+          avatars[username] = "http://localhost:8081/avatars/cat.png";
+        }
+      }
+      
+      setUserAvatars(avatars);
+      console.log("Loaded user avatars:", avatars);
+    };
+
+    if (users.length > 0) {
+      loadUserAvatars();
+    }
+  }, [users]);
+
+  // Refresh avatars when messages change (to catch avatar updates)
+  useEffect(() => {
+    const refreshAvatars = async () => {
+      const uniqueUsers = new Set<string>();
+      messages.forEach(msg => {
+        uniqueUsers.add(msg.senderName);
+      });
+      
+      const avatars: {[key: string]: string} = {...userAvatars};
+      
+      for (const username of uniqueUsers) {
+        try {
+          const response = await axios.get(`http://localhost:8081/api/user/${username}`);
+          if (response.data && response.data.avatarUrl) {
+            avatars[username] = response.data.avatarUrl;
+          }
+        } catch (e) {
+          console.log(`Error refreshing avatar for ${username}:`, e);
+        }
+      }
+      
+      setUserAvatars(avatars);
+    };
+
+    if (messages.length > 0) {
+      refreshAvatars();
+    }
+  }, [messages]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -76,7 +135,22 @@ const DirectMessages = ({ user, stompClient, allUsers }: DirectMessagesProps) =>
     console.log("Full private message data:", payloadData);
     
     if (selectedUser === payloadData.senderName || selectedUser === payloadData.receiverName) {
-      setMessages((prev) => [...prev, payloadData]);
+      setMessages((prev) => {
+        console.log("Adding DM to existing messages:", prev.length);
+        
+        // Check if this is a duplicate message (sender receiving their own message)
+        const isDuplicate = prev.length > 0 && 
+          prev[prev.length - 1].senderName === payloadData.senderName &&
+          prev[prev.length - 1].content === payloadData.content &&
+          prev[prev.length - 1].date === payloadData.date;
+        
+        if (isDuplicate) {
+          console.log("Skipping duplicate DM from:", payloadData.senderName);
+          return prev;
+        }
+        
+        return [...prev, payloadData];
+      });
     } else {
       loadUnreadMessages();
     }
@@ -142,6 +216,12 @@ const DirectMessages = ({ user, stompClient, allUsers }: DirectMessagesProps) =>
       content: message.trim(),
       date: new Date().toISOString(),
     };
+
+    // Add message to local state immediately for instant feedback
+    setMessages((prev) => {
+      console.log("Adding own DM to local state:", prev.length);
+      return [...prev, payloadMessage];
+    });
 
     stompClient.publish({
       destination: "/app/private-message",
@@ -214,7 +294,12 @@ const DirectMessages = ({ user, stompClient, allUsers }: DirectMessagesProps) =>
                   }}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                    <Avatar 
+                      avatarUrl={userAvatars[username] || "http://localhost:8081/avatars/cat.png"}
+                      username={username}
+                      size={40}
+                    />
                     <Typography>{username}</Typography>
                     {unreadCount > 0 && <span style={{ color: 'red' }}>●</span>}
                   </Box>
@@ -251,9 +336,18 @@ const DirectMessages = ({ user, stompClient, allUsers }: DirectMessagesProps) =>
                     sx={{
                       display: 'flex',
                       justifyContent: msg.senderName === user?.username ? 'flex-end' : 'flex-start',
-                      width: '100%'
+                      width: '100%',
+                      alignItems: 'flex-end',
+                      gap: 1
                     }}
                   >
+                    {msg.senderName !== user?.username && (
+                      <Avatar 
+                        avatarUrl={userAvatars[msg.senderName] || "http://localhost:8081/avatars/cat.png"}
+                        username={msg.senderName}
+                        size={32}
+                      />
+                    )}
                     <Box
                       sx={{
                         maxWidth: '70%',
@@ -273,6 +367,13 @@ const DirectMessages = ({ user, stompClient, allUsers }: DirectMessagesProps) =>
                         {new Date(msg.date).toLocaleTimeString()}
                       </Typography>
                     </Box>
+                    {msg.senderName === user?.username && (
+                      <Avatar 
+                        avatarUrl={userAvatars[msg.senderName] || "http://localhost:8081/avatars/cat.png"}
+                        username={msg.senderName}
+                        size={32}
+                      />
+                    )}
                   </Box>
                 </ListItem>
               ))}

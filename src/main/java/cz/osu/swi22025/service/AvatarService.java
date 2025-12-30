@@ -9,25 +9,27 @@ import java.util.List;
 public class AvatarService {
 
     private static final List<String> DEFAULT_AVATARS = Arrays.asList(
-        "http://localhost:8081/avatars/cat.png",
-        "http://localhost:8081/avatars/female.png", 
-        "http://localhost:8081/avatars/kapuce.png",
-        "http://localhost:8081/avatars/male.png",
-        "http://localhost:8081/avatars/robot.png"
+        "cat.png",
+        "female.png", 
+        "kapuce.png",
+        "male.png",
+        "robot.png"
     );
 
     public List<String> getAllAvatars() {
-        return DEFAULT_AVATARS;
+        return DEFAULT_AVATARS.stream()
+            .map(avatar -> "http://localhost:8081/avatars/" + avatar)
+            .toList();
     }
 
-    public String getAvatarUrl(int avatarIndex) {
-        if (avatarIndex < 0 || avatarIndex >= DEFAULT_AVATARS.size()) {
-            return DEFAULT_AVATARS.get(0);
+    public String getAvatarUrl(int index) {
+        if (index >= 0 && index < DEFAULT_AVATARS.size()) {
+            return "http://localhost:8081/avatars/" + DEFAULT_AVATARS.get(index);
         }
-        return DEFAULT_AVATARS.get(avatarIndex);
+        return "http://localhost:8081/avatars/cat.png"; // Default to cat.png
     }
 
     public boolean isValidAvatar(String avatarUrl) {
-        return DEFAULT_AVATARS.contains(avatarUrl);
+        return getAllAvatars().contains(avatarUrl);
     }
 }
