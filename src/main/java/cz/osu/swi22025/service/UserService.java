@@ -38,9 +38,9 @@ public class UserService {
             ChatUser savedUser = userRepository.save(user);
 
             Queue userQueue = rabbitMQConfig.createUserQueue(savedUser.getUserId().toString());
-            rabbitAdmin.declareQueue(userQueue);
-            rabbitAdmin.declareBinding(rabbitMQConfig.bindUserQueue
-                    (userQueue, rabbitMQConfig.chatroomExchange()));
+            // rabbitAdmin.declareQueue(userQueue);
+            // rabbitAdmin.declareBinding(rabbitMQConfig.bindUserQueue
+            //         (userQueue, rabbitMQConfig.chatroomExchange()));
 
             ret = new ResponseEntity<>("User registered successfully", HttpStatus.OK);
         }

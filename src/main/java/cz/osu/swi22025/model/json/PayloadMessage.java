@@ -9,4 +9,10 @@ public class PayloadMessage {
     private String receiverChatRoomId;
     private String content;
     private String date;
+    private String senderAvatarUrl;
+    private String messageType = "TEXT";
+    private String fileUrl;
+    private String fileName;
+    private Boolean isNotification = false;
+    private String notificationType;
 }

@@ -4,6 +4,12 @@ export interface PayloadMessage {
   receiverChatRoomId: string;
   content: string;
   date: string;
+  senderAvatarUrl?: string;
+  messageType?: string;
+  fileUrl?: string;
+  fileName?: string;
+  isNotification?: boolean;
+  notificationType?: string;
 }
 
 export interface User {

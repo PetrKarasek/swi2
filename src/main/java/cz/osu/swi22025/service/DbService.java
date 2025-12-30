@@ -18,11 +18,12 @@ public class DbService {
     private final UserRepository userRepository;
     private final ChatRoomRepository chatRoomRepository;
 
-    public ResponseEntity<List<ChatUser>> getUsers() {
+    public ResponseEntity<List<String>> getUsers() {
         List<ChatUser> chatUsers = (List<ChatUser>) userRepository.findAll();
-        chatUsers.forEach(chatUser -> chatUser.setJoinedRooms(null));
-        chatUsers.forEach(chatUser -> chatUser.setMessages(null));
-        return ResponseEntity.ok(chatUsers);
+        List<String> usernames = chatUsers.stream()
+                .map(ChatUser::getUsername)
+                .collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(usernames);
     }
 
     public ResponseEntity<List<ChatRoom>> getChatRooms(String username) {

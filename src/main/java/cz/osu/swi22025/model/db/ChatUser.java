@@ -19,6 +19,15 @@ public class ChatUser {
     @Column(nullable = false)
     private String password;
 
+    @Column(name = "avatar_url")
+    private String avatarUrl;
+
+    @Column(name = "timezone")
+    private String timezone = "UTC";
+
+    @Column(name = "current_room_id")
+    private Integer currentRoomId;
+
     @ManyToMany
     @JoinTable(
             name = "chat_member",

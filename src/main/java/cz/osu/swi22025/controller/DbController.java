@@ -20,7 +20,7 @@ public class DbController {
     private DbService dbService;
 
     @GetMapping(value = "/users")
-    public ResponseEntity<List<ChatUser>> getUsers() {
+    public ResponseEntity<List<String>> getUsers() {
         return dbService.getUsers();
     }
 

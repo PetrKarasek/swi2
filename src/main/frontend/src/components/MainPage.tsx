@@ -1,13 +1,17 @@
-import { Box, Button, TextField, Typography, Paper, List, ListItem, AppBar, Toolbar } from "@mui/material";
+import { Box, Button, TextField, Typography, Paper, List, ListItem, AppBar, Toolbar, Tabs, Tab } from "@mui/material";
 import React, { useEffect, useState, useRef } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import axios from "axios";
 import { PayloadMessage, UserToken } from "../types";
+import DirectMessages from "./DirectMessages";
+import Avatar from "./Avatar";
+import AvatarSelector from "./AvatarSelector";
 
 var stompClient: any = null;
 const PICKUP_URL = "http://localhost:8081/api/queue";
 const HISTORY_URL = "http://localhost:8081/api/history";
+const USERS_URL = "http://localhost:8081/users";
 
 const PENDING_MESSAGES_KEY = "pendingMessages";
 
@@ -16,6 +20,10 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
   const [messages, setMessages] = useState<PayloadMessage[]>([]);
   const [connected, setConnected] = useState(false);
   const [pendingMessages, setPendingMessages] = useState<PayloadMessage[]>([]);
+  const [allUsers, setAllUsers] = useState<string[]>([]);
+  const [currentTab, setCurrentTab] = useState(0);
+  const [userAvatar, setUserAvatar] = useState<string>("");
+  const [avatarSelectorOpen, setAvatarSelectorOpen] = useState(false);
   const isLoggedIn = !!props.user;
 
   const stompClientRef = useRef<Client | null>(null);
@@ -69,12 +77,21 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
     }
   };
 
-  // When user logs in, try to send pending messages
+  // When user logs in, try to send pending messages and load users
   useEffect(() => {
     if (isLoggedIn && connected) {
       sendPendingMessages();
+      loadUsers();
+      loadUserAvatar(); // Load user's avatar
     }
-  }, [isLoggedIn, connected, props.user]);
+  }, [isLoggedIn, connected]);
+
+  // Also load avatar when user changes
+  useEffect(() => {
+    if (props.user) {
+      loadUserAvatar();
+    }
+  }, [props.user]);
 
   useEffect(() => {
     let sock = new SockJS("http://localhost:8081/ws");
@@ -85,7 +102,12 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
       onConnect: () => {
         console.log("Connected to WebSocket");
         setConnected(true);
-        stompClient.subscribe("/chatroom/1", onPublicMessageReceived);
+        console.log("Attempting to subscribe to /chatroom/1");
+        const subscription = stompClient.subscribe("/chatroom/1", (message: any) => {
+          console.log("Received message on /chatroom/1:", message);
+          onPublicMessageReceived(message);
+        });
+        console.log("Successfully subscribed to /chatroom/1");
         
         // If user is logged in and we have pending messages, send them now
         setTimeout(() => {
@@ -129,19 +151,56 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  function onPublicMessageReceived(payload: any) {
-    // Zprávy přijaté v reálném čase pouze přidáme do seznamu.
+  const onPublicMessageReceived = (payload: any) => {
     let payloadData: PayloadMessage = JSON.parse(payload.body);
     console.log("Message received from: " + payloadData.senderName);
-    setMessages((prev: PayloadMessage[]) => [...prev, payloadData]);
+    console.log("Full message data:", payloadData);
+    console.log("Current messages count:", messages.length);
+    setMessages((prev: PayloadMessage[]) => {
+      console.log("Adding message to existing messages:", prev.length);
+      return [...prev, payloadData];
+    });
+  };
+
+  async function loadUsers() {
+    try {
+      const result = await axios.get<string[]>(USERS_URL);
+      if (result.data) {
+        setAllUsers(result.data);
+        console.log("Loaded users:", result.data);
+      }
+    } catch (e) {
+      console.log("Error loading users:", e);
+      // Fallback users for testing
+      setAllUsers(["testuser", "alice", "bob"]);
+    }
+  }
+
+  async function loadUserAvatar() {
+    try {
+      // Get user info including avatar
+      const response = await axios.get(`http://localhost:8081/api/user/${props.user?.username}`);
+      if (response.data && response.data.avatarUrl) {
+        setUserAvatar(response.data.avatarUrl);
+        console.log("Loaded user avatar:", response.data.avatarUrl);
+      }
+    } catch (e) {
+      console.log("Error loading user avatar:", e);
+      // Set default avatar if none found
+      setUserAvatar("http://localhost:8081/avatars/cat.png");
+    }
   }
 
   async function loadHistory() {
     try {
-      const params = new URLSearchParams([["chatRoomId", "1"]]);
+      const params = new URLSearchParams([
+        ["chatRoomId", "1"],
+        ["username", props.user?.username || ""]
+      ]);
       const result = await axios.get<PayloadMessage[]>(HISTORY_URL, { params });
       if (result.data) {
         setMessages(result.data);
+        console.log("Loaded message history:", result.data);
       }
     } catch (e) {
       console.log("Error loading history:", e);
@@ -169,6 +228,7 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
           destination: "/app/message",
           body: JSON.stringify(payloadMessage),
         });
+        console.log("Message sent to /app/message:", payloadMessage);
       } else {
         console.error("WebSocket not connected");
       }
@@ -188,17 +248,9 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
 
   async function pickupMessages() {
     if (!props.user) return;
-    const params = new URLSearchParams([["userId", props.user.userId]]);
-
-    try {
-      const result = await axios.get<PayloadMessage[]>(PICKUP_URL, { params });
-      
-      if (result.data && result.data.length > 0) {
-        setMessages((prev: PayloadMessage[]) => [...prev, ...result.data]);
-      }
-    } catch (e) {
-      console.log("Error picking up messages:", e);
-    }
+    
+    // Just reload the message history when user logs in
+    await loadHistory();
   }
 
   function logout() {
@@ -222,14 +274,32 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
     setMessage(e.target.value);
   };
 
+  const handleAvatarClick = () => {
+    if (isLoggedIn) {
+      setAvatarSelectorOpen(true);
+    }
+  };
+
+  const handleAvatarChange = (newAvatarUrl: string) => {
+    setUserAvatar(newAvatarUrl);
+  };
+
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <AppBar position="static" sx={{ background: "rgba(15,23,42,0.98)" }}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Hlavní místnost · {isLoggedIn ? props.user?.username : "Host"}
+            Chat Application · {isLoggedIn ? props.user?.username : "Host"}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {isLoggedIn && (
+              <Avatar 
+                avatarUrl={userAvatar}
+                username={props.user?.username}
+                onClick={handleAvatarClick}
+                clickable={true}
+              />
+            )}
             <Typography variant="body2">
               {connected ? "🟢 Connected" : "🔴 Disconnected"}
             </Typography>
@@ -242,91 +312,134 @@ const MainPage = (props: { user: UserToken | null; setUserToken: (token: UserTok
         </Toolbar>
       </AppBar>
 
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, position: 'relative', overflow: 'hidden' }}>
-        <Paper 
-          sx={{ 
-            flex: 1, 
-            p: 2, 
-            mb: 2, 
-            overflow: 'auto',
-            backgroundColor: '#f5f5f5',
-            maxHeight: 'calc(100% - 80px)'
-          }}
-        >
-          <List>
-            {messages.map((msg: PayloadMessage, index: number) => (
-              <ListItem key={index} sx={{ p: 0, mb: 1 }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: msg.senderName === props.user?.username ? 'flex-end' : 'flex-start',
-                    width: '100%'
-                  }}
-                >
+      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)}>
+          <Tab label="Public Chat" />
+          <Tab label="Direct Messages" />
+        </Tabs>
+      </Box>
+
+      {currentTab === 0 && (
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, position: 'relative', overflow: 'hidden' }}>
+          <Paper 
+            sx={{ 
+              flex: 1, 
+              p: 2, 
+              mb: 2, 
+              overflow: 'auto',
+              backgroundColor: '#f5f5f5',
+              maxHeight: 'calc(100% - 80px)'
+            }}
+          >
+            <List>
+              {messages.map((msg: PayloadMessage, index: number) => (
+                <ListItem key={index} sx={{ p: 0, mb: 1 }}>
                   <Box
                     sx={{
-                      maxWidth: '70%',
-                      p: 2,
-                      borderRadius: 2,
-                      backgroundColor: msg.senderName === props.user?.username ? '#1976d2' : '#e0e0e0',
-                      color: msg.senderName === props.user?.username ? 'white' : 'black'
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: msg.senderName === props.user?.username ? 'flex-end' : 'flex-start',
+                      width: '100%',
+                      gap: 1
                     }}
                   >
-                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
-                      {msg.senderName}
-                    </Typography>
-                    <Typography variant="body1">
-                      {msg.content}
-                    </Typography>
-                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.7 }}>
-                      {new Date(msg.date).toLocaleTimeString()}
-                    </Typography>
+                    {msg.senderName !== props.user?.username && (
+                      <Avatar 
+                        avatarUrl={msg.senderAvatarUrl}
+                        username={msg.senderName}
+                        size={32}
+                      />
+                    )}
+                    <Box
+                      sx={{
+                        maxWidth: '70%',
+                        p: 2,
+                        borderRadius: 2,
+                        backgroundColor: msg.senderName === props.user?.username ? '#1976d2' : '#e0e0e0',
+                        color: msg.senderName === props.user?.username ? 'white' : 'black'
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+                        {msg.senderName}
+                      </Typography>
+                      <Typography variant="body1">
+                        {msg.content}
+                      </Typography>
+                      <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.7 }}>
+                        {new Date(msg.date).toLocaleTimeString()}
+                      </Typography>
+                    </Box>
+                    {msg.senderName === props.user?.username && (
+                      <Avatar 
+                        avatarUrl={userAvatar}
+                        username={msg.senderName}
+                        size={32}
+                      />
+                    )}
                   </Box>
-                </Box>
-              </ListItem>
-            ))}
-            <div ref={messagesEndRef} />
-          </List>
-        </Paper>
+                </ListItem>
+              ))}
+              <div ref={messagesEndRef} />
+            </List>
+          </Paper>
 
-        <Box sx={{ 
-          position: 'absolute', 
-          bottom: 0, 
-          left: 0, 
-          right: 0, 
-          p: 2, 
-          backgroundColor: 'white',
-          borderTop: '1px solid #e0e0e0'
-        }}>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-          <Box sx={{ flex: 1 }}>
-            <TextField
-              fullWidth
-              label={isLoggedIn ? "Type your message here" : pendingMessages.length > 0 ? `${pendingMessages.length} zpráv ve frontě - přihlas se pro odeslání` : "Napiš zprávu (bude ve frontě do přihlášení)"}
-              variant="outlined"
-              value={message}
-              onChange={handleMessageChange}
-              onKeyPress={handleKeyPress}
-              disabled={false}
-              inputProps={{ style: { pointerEvents: 'auto' } }}
-            />
-            {pendingMessages.length > 0 && !isLoggedIn && (
-              <Typography variant="caption" sx={{ color: '#1976d2', mt: 0.5, display: 'block' }}>
-                {pendingMessages.length} zpráv čeká ve frontě. Přihlas se pro jejich odeslání.
-              </Typography>
-            )}
+          <Box sx={{ 
+            position: 'absolute', 
+            bottom: 0, 
+            left: 0, 
+            right: 0, 
+            p: 2, 
+            backgroundColor: 'white',
+            borderTop: '1px solid #e0e0e0'
+          }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+            <Box sx={{ flex: 1 }}>
+              <TextField
+                fullWidth
+                label={isLoggedIn ? "Type your message here" : pendingMessages.length > 0 ? `${pendingMessages.length} zpráv ve frontě - přihlas se pro odeslání` : "Napiš zprávu (bude ve frontě do přihlášení)"}
+                variant="outlined"
+                value={message}
+                onChange={handleMessageChange}
+                onKeyPress={handleKeyPress}
+                disabled={false}
+                inputProps={{ style: { pointerEvents: 'auto' } }}
+              />
+              {pendingMessages.length > 0 && !isLoggedIn && (
+                <Typography variant="caption" sx={{ color: '#1976d2', mt: 0.5, display: 'block' }}>
+                  {pendingMessages.length} zpráv čeká ve frontě. Přihlas se pro jejich odeslání.
+                </Typography>
+              )}
+            </Box>
+            <Button 
+              variant="contained" 
+              onClick={sendMessage}
+              disabled={!message.trim()}
+              sx={{ minWidth: 80 }}
+            >
+              Send
+            </Button>
           </Box>
-          <Button 
-            variant="contained" 
-            onClick={sendMessage}
-            disabled={!message.trim()}
-            sx={{ minWidth: 80 }}
-          >
-            Send
-          </Button>
         </Box>
       </Box>
-      </Box>
+      )}
+
+      {currentTab === 1 && (
+        <Box sx={{ flex: 1, p: 2 }}>
+          <DirectMessages 
+            user={props.user} 
+            stompClient={stompClientRef.current} 
+            allUsers={allUsers}
+          />
+        </Box>
+      )}
+      
+      <AvatarSelector
+        open={avatarSelectorOpen}
+        onClose={() => setAvatarSelectorOpen(false)}
+        username={props.user?.username || ""}
+        currentAvatar={userAvatar}
+        onAvatarChange={handleAvatarChange}
+      />
     </Box>
   );
 };
