@@ -3,10 +3,13 @@ package cz.osu.swi22025.service;
 import cz.osu.swi22025.config.RabbitMQConfig;
 import cz.osu.swi22025.model.ChatRoomRepository;
 import cz.osu.swi22025.model.UserRepository;
-import cz.osu.swi22025.model.db.ChatUser;
 import cz.osu.swi22025.model.MessageRepository;
+import cz.osu.swi22025.model.ChatUser;
 import cz.osu.swi22025.model.json.SignupForm;
 import cz.osu.swi22025.model.json.UserToken;
+import cz.osu.swi22025.model.DirectMessage;
+import cz.osu.swi22025.model.Message;
+import cz.osu.swi22025.model.ChatRoom;
 import lombok.AllArgsConstructor;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
@@ -50,8 +53,8 @@ public class UserService {
     public ResponseEntity<Object> authenticate(SignupForm userCredentials) {
         ResponseEntity<Object> ret;
 
-        ChatUser user = userRepository.findChatUserByUsernameIgnoreCase(
-                userCredentials.getUsername());
+        ChatUser user = userRepository.findByUsernameIgnoreCase(
+                userCredentials.getUsername()).orElse(null);
         if (user != null) {
             if (user.getPassword().equals(userCredentials.getPassword())) {
                 UserToken userToken = new UserToken(user.getUserId(), user.getUsername());

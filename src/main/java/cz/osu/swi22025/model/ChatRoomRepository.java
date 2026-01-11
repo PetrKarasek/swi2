@@ -1,6 +1,6 @@
 package cz.osu.swi22025.model;
 
-import cz.osu.swi22025.model.db.ChatRoom;
+import cz.osu.swi22025.model.ChatRoom;
 import org.springframework.data.repository.CrudRepository;
 
 import java.util.List;

@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Container, Typography, Paper, Grid } from "@mui/material";
 import Login from "./Login";
-import MainPage from "./MainPage";
+import MainPage from "./MainPage.tsx";
 import MainPagePreview from "./MainPagePreview";
 import { UserToken } from "../types";
 

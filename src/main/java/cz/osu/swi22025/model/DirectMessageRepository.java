@@ -1,7 +1,7 @@
 package cz.osu.swi22025.model;
 
-import cz.osu.swi22025.model.db.DirectMessage;
-import cz.osu.swi22025.model.db.ChatUser;
+import cz.osu.swi22025.model.DirectMessage;
+import cz.osu.swi22025.model.ChatUser;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

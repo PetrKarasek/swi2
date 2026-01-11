@@ -1,6 +1,6 @@
 package cz.osu.swi22025.model;
 
-import cz.osu.swi22025.model.db.Message;
+import cz.osu.swi22025.model.Message;
 import org.springframework.data.repository.CrudRepository;
 
 import java.util.List;

@@ -1,4 +1,4 @@
-package cz.osu.swi22025.model.db;
+package cz.osu.swi22025.model;
 
 import jakarta.persistence.*;
 import lombok.Data;

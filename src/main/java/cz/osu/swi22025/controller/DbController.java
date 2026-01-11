@@ -1,7 +1,7 @@
 package cz.osu.swi22025.controller;
 
-import cz.osu.swi22025.model.db.ChatRoom;
-import cz.osu.swi22025.model.db.ChatUser;
+import cz.osu.swi22025.model.ChatRoom;
+import cz.osu.swi22025.model.ChatUser;
 import cz.osu.swi22025.service.DbService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;

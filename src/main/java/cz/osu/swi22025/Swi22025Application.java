@@ -6,13 +6,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import cz.osu.swi22025.service.UserService;
 import cz.osu.swi22025.model.ChatRoomRepository;
-import cz.osu.swi22025.model.db.ChatRoom;
+import cz.osu.swi22025.model.ChatRoom;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 
 @SpringBootApplication
+@EntityScan("cz.osu.swi22025.model")
 public class Swi22025Application implements CommandLineRunner {
 
     @Autowired

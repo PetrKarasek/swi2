@@ -1,7 +1,7 @@
 package cz.osu.swi22025.service;
 
-import cz.osu.swi22025.model.db.ChatUser;
-import cz.osu.swi22025.model.db.ChatRoom;
+import cz.osu.swi22025.model.ChatUser;
+import cz.osu.swi22025.model.ChatRoom;
 import cz.osu.swi22025.model.json.PayloadMessage;
 import cz.osu.swi22025.model.UserRepository;
 import cz.osu.swi22025.model.ChatRoomRepository;
@@ -41,7 +41,8 @@ public class NotificationService {
     }
 
     public void notifyUserOfPrivateMessage(PayloadMessage message) {
-        ChatUser receiver = userRepository.findChatUserByUsernameIgnoreCase(message.getReceiverName());
+        ChatUser receiver = userRepository.findByUsernameIgnoreCase(message.getReceiverName())
+            .orElse(null);
         if (receiver != null) {
             PayloadMessage notification = createNotification(message, "PRIVATE_MESSAGE", null);
             messagingTemplate.convertAndSendToUser(receiver.getUsername(), "/notifications", notification);
