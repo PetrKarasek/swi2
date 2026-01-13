@@ -1,5 +1,6 @@
 package cz.osu.swi22025.desktop;
 
+import cz.osu.swi22025.model.json.UserToken;
 import javafx.application.Application;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
@@ -10,14 +11,26 @@ import javafx.stage.Stage;
 public class DesktopApp extends Application {
 
     private final DesktopClient client = new DesktopClient();
+    private Scene scene;
+    private Stage primaryStage;
 
     @Override
     public void start(Stage primaryStage) {
+        this.primaryStage = primaryStage;
         primaryStage.setTitle("SWI2 Chat Desktop");
 
-        LoginView loginView = new LoginView(client, userToken -> {
+        // jedna Scene napořád, jen měníme root
+        LoginView loginView = createLoginView();
+        scene = new Scene(loginView, 900, 650);
 
-            // ✅ TADY: po loginu odešli pending zprávy z host módu
+        primaryStage.setScene(scene);
+        primaryStage.show();
+    }
+
+    private LoginView createLoginView() {
+        return new LoginView(client, userToken -> {
+
+            // ✅ po loginu odešli pending zprávy z host módu
             PendingStore store = new PendingStore();
             var pending = store.load();
             for (var p : pending) {
@@ -26,15 +39,24 @@ public class DesktopApp extends Application {
                 } catch (Exception ignored) {}
             }
             store.clear();
-            // ✅ KONEC
+            // ✅ konec pending
 
-            // After successful login, show main chat view (main room)
-            ChatView chatView = new ChatView(client, userToken);
-            primaryStage.setScene(new Scene(chatView, 800, 600));
+            showChat(userToken);
+        });
+    }
+
+    private void showChat(UserToken userToken) {
+        ChatView chatView = new ChatView(client, userToken, () -> {
+            // logout → zpět na login
+            scene.setRoot(createLoginView());
+            // (volitelně) přenastav velikost okna
+            primaryStage.setWidth(900);
+            primaryStage.setHeight(650);
         });
 
-        primaryStage.setScene(new Scene(loginView, 500, 350));
-        primaryStage.show();
+        scene.setRoot(chatView);
+        primaryStage.setWidth(1100);
+        primaryStage.setHeight(750);
     }
 
     public static void main(String[] args) {

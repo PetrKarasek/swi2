@@ -47,16 +47,16 @@ public class ChatController {
     private PayloadMessage savePublicMessageToDB(PayloadMessage message) {
         try {
             ChatUser sender = userRepository.findChatUserByUsernameIgnoreCase(message.getSenderName());
-            Integer roomId = 1; 
+            Integer roomId = 1;
             try { roomId = Integer.valueOf(message.getReceiverChatRoomId()); } catch (Exception e) {}
-            
+
             ChatRoom chatRoom = chatRoomRepository.findById(roomId).orElse(null);
 
             if (sender != null && chatRoom != null) {
                 Message dbMessage = new Message();
                 dbMessage.setChatUser(sender);
                 dbMessage.setChatRoom(chatRoom);
-                
+
                 if (message.getFileUrl() != null) {
                     dbMessage.setContent("[FILE] " + message.getFileName() + " | " + message.getFileUrl());
                 } else {
@@ -65,7 +65,8 @@ public class ChatController {
                 dbMessage.setSendTime(new Date());
                 messageRepository.save(dbMessage);
 
-                message.setSenderAvatarUrl(sender.getAvatarUrl());
+                // 🔑 sjednocení: do payloadu posílej vždy normalizovanou RELATIVNÍ cestu (/avatars/..)
+                message.setSenderAvatarUrl(avatarService.normalizeAvatarUrl(sender.getAvatarUrl()));
                 message.setDate(timezoneService.convertToUserTimezone(dbMessage.getSendTime().toInstant(), sender.getTimezone()));
                 message.setReceiverChatRoomId(String.valueOf(roomId));
             }
@@ -77,7 +78,7 @@ public class ChatController {
 
     @PostMapping("/api/upload-file")
     @ResponseBody
-    public PayloadMessage uploadFile(@RequestParam String username, 
+    public PayloadMessage uploadFile(@RequestParam String username,
                                      @RequestParam String receiverChatRoomId,
                                      @RequestParam(required = false) String receiverName,
                                      @RequestParam(required = false) String id,
@@ -88,7 +89,7 @@ public class ChatController {
 
             String fileUrl = fileService.storeFile(file);
             boolean isImage = fileService.isImageFile(file.getOriginalFilename());
-            
+
             PayloadMessage message = new PayloadMessage();
             if (id != null && !id.isEmpty()) {
                 message.setId(id);
@@ -97,7 +98,7 @@ public class ChatController {
             }
 
             message.setSenderName(username);
-            message.setSenderAvatarUrl(sender.getAvatarUrl());
+            message.setSenderAvatarUrl(avatarService.normalizeAvatarUrl(sender.getAvatarUrl()));
             message.setReceiverChatRoomId(receiverChatRoomId);
             message.setReceiverName(receiverName);
             message.setContent(file.getOriginalFilename());
@@ -133,7 +134,7 @@ public class ChatController {
     private PayloadMessage handlePrivateMessage(PayloadMessage message) {
         ChatUser sender = userRepository.findChatUserByUsernameIgnoreCase(message.getSenderName());
         ChatUser receiver = userRepository.findChatUserByUsernameIgnoreCase(message.getReceiverName());
-        
+
         if (sender != null && receiver != null) {
             DirectMessage dm = new DirectMessage();
             dm.setSender(sender);
@@ -147,12 +148,12 @@ public class ChatController {
             dm.setIsRead(false);
             directMessageRepository.save(dm);
 
-            message.setSenderAvatarUrl(sender.getAvatarUrl());
+            message.setSenderAvatarUrl(avatarService.normalizeAvatarUrl(sender.getAvatarUrl()));
             message.setDate(timezoneService.convertToUserTimezone(dm.getSendTime().toInstant(), sender.getTimezone()));
 
             messagingTemplate.convertAndSendToUser(message.getReceiverName(), "/private", message);
             messagingTemplate.convertAndSendToUser(message.getSenderName(), "/private", message);
-            
+
             notificationService.notifyUserOfPrivateMessage(message);
         }
         return message;
@@ -164,15 +165,18 @@ public class ChatController {
         Integer id = Integer.valueOf(chatRoomId);
         ChatUser user = username != null ? userRepository.findChatUserByUsernameIgnoreCase(username) : null;
         String userTimezone = user != null ? user.getTimezone() : "UTC";
-        
-        return messageRepository.findByChatRoom_ChatIdOrderBySendTimeAsc(id).stream().map(m -> mapToPayload(m, userTimezone)).collect(Collectors.toList());
+
+        return messageRepository.findByChatRoom_ChatIdOrderBySendTimeAsc(id)
+                .stream()
+                .map(m -> mapToPayload(m, userTimezone))
+                .collect(Collectors.toList());
     }
 
     private PayloadMessage mapToPayload(Message m, String userTimezone) {
         PayloadMessage p = new PayloadMessage();
         p.setId(UUID.randomUUID().toString());
         p.setSenderName(m.getChatUser().getUsername());
-        p.setSenderAvatarUrl(m.getChatUser().getAvatarUrl());
+        p.setSenderAvatarUrl(avatarService.normalizeAvatarUrl(m.getChatUser().getAvatarUrl()));
         p.setReceiverChatRoomId(String.valueOf(m.getChatRoom().getChatId()));
         p.setContent(m.getContent());
         if (m.getContent() != null && m.getContent().startsWith("[FILE]")) {
@@ -194,20 +198,21 @@ public class ChatController {
         ChatUser u1 = userRepository.findChatUserByUsernameIgnoreCase(user1);
         ChatUser u2 = userRepository.findChatUserByUsernameIgnoreCase(user2);
         String tz = u1 != null ? u1.getTimezone() : "UTC";
-        
+
         if (u1 != null && u2 != null) {
             return directMessageRepository.findConversationBetweenUsers(u1, u2).stream().map(dm -> {
                 PayloadMessage p = new PayloadMessage();
                 p.setId(UUID.randomUUID().toString());
                 p.setSenderName(dm.getSender().getUsername());
-                p.setSenderAvatarUrl(dm.getSender().getAvatarUrl());
+                p.setSenderAvatarUrl(avatarService.normalizeAvatarUrl(dm.getSender().getAvatarUrl()));
                 p.setReceiverName(dm.getReceiver().getUsername());
                 p.setContent(dm.getContent());
                 if (dm.getContent() != null && dm.getContent().startsWith("[FILE]")) {
                     try {
                         String[] parts = dm.getContent().replace("[FILE]", "").split("\\|");
                         if (parts.length >= 2) {
-                            p.setFileName(parts[0].trim()); p.setFileUrl(parts[1].trim());
+                            p.setFileName(parts[0].trim());
+                            p.setFileUrl(parts[1].trim());
                         }
                     } catch (Exception e) {}
                 }
@@ -246,7 +251,7 @@ public class ChatController {
             directMessageRepository.saveAll(unread);
         }
     }
-    
+
     @PostMapping("/api/upload-avatar")
     @ResponseBody
     public String uploadAvatar(@RequestParam String username, @RequestParam MultipartFile file) {
@@ -261,17 +266,40 @@ public class ChatController {
         } catch (Exception e) {}
         return null;
     }
-    
-    @GetMapping("/api/avatars") @ResponseBody public List<String> getAvatars() { return avatarService.getAllAvatars(); }
-    
-    @PostMapping("/api/select-avatar") @ResponseBody public void selectAvatar(@RequestParam String username, @RequestParam int avatarIndex) {
-        ChatUser user = userRepository.findByUsernameIgnoreCase(username).orElse(null);
-        if (user != null) { user.setAvatarUrl(avatarService.getAvatarUrl(avatarIndex)); userRepository.save(user); }
+
+    // Avatars for both web and desktop: return RELATIVE urls ("/avatars/...")
+    @GetMapping("/api/avatars")
+    @ResponseBody
+    public List<String> getAvatars() {
+        // vrací RELATIVNÍ URL (/avatars/..). Web/desktop si to doplní o host.
+        return avatarService.getAvailableAvatars();
     }
-    
-    @GetMapping("/api/user/{username}") @ResponseBody public Object getUserInfo(@PathVariable String username) {
+
+    @PostMapping("/api/select-avatar")
+    @ResponseBody
+    public void selectAvatar(@RequestParam String username, @RequestParam int avatarIndex) {
         ChatUser user = userRepository.findByUsernameIgnoreCase(username).orElse(null);
-        if (user == null) return java.util.Map.of("username", username, "avatarUrl", "http://localhost:8081/avatars/cat.png");
-        return java.util.Map.of("userId", user.getUserId().toString(), "username", user.getUsername(), "avatarUrl", user.getAvatarUrl()!=null?user.getAvatarUrl():"http://localhost:8081/avatars/cat.png", "timezone", user.getTimezone());
+        if (user != null) {
+            user.setAvatarUrl(avatarService.avatarByIndex(avatarIndex));
+            userRepository.save(user);
+        }
+    }
+
+    @GetMapping("/api/user/{username}")
+    @ResponseBody
+    public Object getUserInfo(@PathVariable String username) {
+        ChatUser user = userRepository.findByUsernameIgnoreCase(username).orElse(null);
+        if (user == null) {
+            return java.util.Map.of(
+                    "username", username,
+                    "avatarUrl", avatarService.getDefaultAvatar()
+            );
+        }
+        return java.util.Map.of(
+                "userId", user.getUserId().toString(),
+                "username", user.getUsername(),
+                "avatarUrl", avatarService.normalizeAvatarUrl(user.getAvatarUrl()),
+                "timezone", user.getTimezone()
+        );
     }
 }

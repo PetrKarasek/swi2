@@ -5,10 +5,11 @@ import cz.osu.swi22025.model.json.SignupForm;
 import cz.osu.swi22025.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import cz.osu.swi22025.model.json.AvatarUpdateRequest;
+import cz.osu.swi22025.model.json.UserProfileDto;
+
+import java.util.UUID;
 
 @RestController
 @CrossOrigin
@@ -19,6 +20,19 @@ public class UserController {
     public UserController(UserService userService, SimpMessagingTemplate messagingTemplate) {
         this.userService = userService;
         this.messagingTemplate = messagingTemplate;
+    }
+
+    @GetMapping("/api/users/by-username/{username}")
+    public UserProfileDto getProfile(@PathVariable String username) {
+        return userService.getProfileByUsername(username);
+    }
+
+    @PutMapping("/api/users/{userId}/avatar")
+    public UserProfileDto updateAvatar(
+            @PathVariable UUID userId,
+            @RequestBody AvatarUpdateRequest request
+    ) {
+        return userService.updateAvatar(userId, request.getAvatarFile());
     }
 
     @PostMapping("/signup")

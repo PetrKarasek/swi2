@@ -14,8 +14,10 @@ public class ChatUser {
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(nullable = false, name = "user_id")
     private UUID userId;
-    @Column(nullable = false)
+
+    @Column(nullable = false, unique = true)
     private String username;
+
     @Column(nullable = false)
     private String password;
 
