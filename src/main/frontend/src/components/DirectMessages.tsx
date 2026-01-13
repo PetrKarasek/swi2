@@ -16,6 +16,10 @@ const DIRECT_HISTORY_URL = "http://localhost:8081/api/direct-history";
 const MARK_READ_URL = "http://localhost:8081/api/mark-messages-read";
 const FILE_UPLOAD_URL = "http://localhost:8081/api/upload-file";
 
+const generateId = () => {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
+};
+
 interface DirectMessagesProps {
   user: UserToken | null;
   stompClient: Client | null;
@@ -24,7 +28,6 @@ interface DirectMessagesProps {
   setConversations: React.Dispatch<React.SetStateAction<{ [username: string]: PayloadMessage[] }>>;
   unreadDMs?: number;
   onUnreadDMsChange?: (count: number | ((prev: number) => number)) => void;
-  // NOVÉ PROPS
   unreadPerUser?: {[key: string]: number};
   clearUnreadForUser?: (username: string) => void;
 }
@@ -113,34 +116,75 @@ const DirectMessages = ({
     setIsDialogOpen(true);
     markMessagesAsRead();
     
-    // Vynulovat počítadlo pro tohoto uživatele
     if (clearUnreadForUser) {
         clearUnreadForUser(targetUser);
     }
   };
 
+  const handleFileUpload = async (file: File, id: string) => {
+      const formData = new FormData(); 
+      formData.append('file', file); 
+      formData.append('username', user!.username); 
+      formData.append('receiverName', selectedUser); 
+      formData.append('receiverChatRoomId', ''); 
+      formData.append('id', id);
+
+      const response = await axios.post(FILE_UPLOAD_URL, formData, { headers: { 'Content-Type': 'multipart/form-data' } }); 
+      return response.data.fileUrl; 
+  };
+
   const sendDirectMessage = async () => {
     if ((!message.trim() && !selectedFile) || !selectedUser || !user) return;
     
-    let fileUrl = ''; let fileName = '';
+    const msgId = generateId();
+
     if (selectedFile) {
-        try { fileUrl = await handleFileUpload(selectedFile); fileName = selectedFile.name; setSelectedFile(null); 
-             const fileMessage: PayloadMessage = { senderName: user.username, receiverName: selectedUser, receiverChatRoomId: "", content: fileName, date: new Date().toISOString(), fileUrl, fileName, messageType: 'FILE' };
-             setConversations(prev => ({ ...prev, [selectedUser]: [...(prev[selectedUser]||[]), fileMessage] })); setMessage(""); return; 
-        } catch (error) { return; }
+        const tempUrl = URL.createObjectURL(selectedFile);
+        const fileName = selectedFile.name;
+        const fileToUpload = selectedFile;
+
+        const fileMessage: PayloadMessage = { 
+             senderName: user.username, 
+             receiverName: selectedUser, 
+             receiverChatRoomId: "", 
+             content: fileName, 
+             date: new Date().toISOString(), 
+             fileUrl: tempUrl, 
+             fileName: fileName, 
+             messageType: 'FILE',
+             id: msgId 
+        };
+        
+        setConversations(prev => ({ ...prev, [selectedUser]: [...(prev[selectedUser]||[]), fileMessage] })); 
+        setMessage(""); 
+        setSelectedFile(null); 
+        
+        try { 
+             await handleFileUpload(fileToUpload, msgId); 
+        } catch (error) { console.error(error); }
+        return; 
     }
-    const content = message.trim(); setMessage("");
-    const payloadMessage: PayloadMessage = { senderName: user.username, receiverName: selectedUser, receiverChatRoomId: "", content, date: new Date().toISOString(), fileUrl, fileName, messageType: 'TEXT' };
+
+    const content = message.trim(); 
+    setMessage("");
+    
+    const payloadMessage: PayloadMessage = { 
+        senderName: user.username, 
+        receiverName: selectedUser, 
+        receiverChatRoomId: "", 
+        content, 
+        date: new Date().toISOString(), 
+        messageType: 'TEXT',
+        id: msgId 
+    };
+    
     setConversations(prev => ({ ...prev, [selectedUser]: [...(prev[selectedUser]||[]), payloadMessage] }));
+    
     if (stompClient?.connected) stompClient.publish({ destination: "/app/private-message", body: JSON.stringify(payloadMessage) });
   };
 
   const handleCloseDialog = () => { setIsDialogOpen(false); setSelectedUser(""); setActiveMessages([]); };
   const handleSelectConversation = (username: string) => { openDirectMessage(username); };
-  const handleFileUpload = async (file: File) => {
-      const formData = new FormData(); formData.append('file', file); formData.append('username', user!.username); formData.append('receiverName', selectedUser); formData.append('receiverChatRoomId', ''); 
-      const response = await axios.post(FILE_UPLOAD_URL, formData, { headers: { 'Content-Type': 'multipart/form-data' } }); return response.data.fileUrl; 
-  };
   const removeSelectedFile = () => { setSelectedFile(null); };
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => { if (event.target.files?.[0]) setSelectedFile(event.target.files[0]); };
 
@@ -155,7 +199,7 @@ const DirectMessages = ({
         onSelectConversation={handleSelectConversation}
         userAvatars={userAvatars}
         selectedUser={selectedUser}
-        unreadPerUser={unreadPerUser} // Předáváme mapu
+        unreadPerUser={unreadPerUser}
       />
 
       <Dialog open={isUserSelectOpen} onClose={() => setIsUserSelectOpen(false)} maxWidth="sm" fullWidth>
@@ -175,10 +219,8 @@ const DirectMessages = ({
                 const isMe = msg.senderName === user?.username;
                 const avatar = userAvatars[msg.senderName] || "http://localhost:8081/avatars/cat.png";
                 const fileInfo = extractFileInfo(msg);
-                const getFullUrl = (url: string) => url.startsWith('http') ? url : `http://localhost:8081${url}`;
-                const currentMsgs = activeMessages.slice(0, index); const lastMsg = currentMsgs[currentMsgs.length - 1];
-                if (lastMsg && lastMsg.content === msg.content && (lastMsg.fileUrl||null) === (msg.fileUrl||null) && Math.abs(new Date(lastMsg.date).getTime() - new Date(msg.date).getTime()) < 1000) return null;
-
+                const getFullUrl = (url: string) => url.startsWith('http') || url.startsWith('blob:') ? url : `http://localhost:8081${url}`;
+                
                 return (
                   <ListItem key={index} sx={{ p: 0, mb: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%', gap: 1 }}>

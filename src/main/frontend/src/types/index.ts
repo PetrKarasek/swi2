@@ -10,6 +10,8 @@ export interface PayloadMessage {
   fileName?: string;
   isNotification?: boolean;
   notificationType?: string;
+  
+  id?: string; 
 }
 
 export interface User {

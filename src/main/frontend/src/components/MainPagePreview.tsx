@@ -4,8 +4,6 @@ import { PayloadMessage } from "../types";
 
 const PENDING_MESSAGES_KEY = "pendingMessages";
 
-// Simple static preview of the main room for users who are not logged in.
-// They can see the layout but not the real messages.
 
 const demoMessages: PayloadMessage[] = [
   {
@@ -49,14 +47,11 @@ const MainPagePreview: React.FC = () => {
       date: new Date().toISOString(),
     };
 
-    // Add to pending messages
     const updatedPending = [...pendingMessages, newMessage];
     setPendingMessages(updatedPending);
     
-    // Save to localStorage
     localStorage.setItem(PENDING_MESSAGES_KEY, JSON.stringify(updatedPending));
     
-    // Clear input
     setMessage("");
     
     console.log("Message queued for later:", newMessage);
@@ -94,7 +89,7 @@ const MainPagePreview: React.FC = () => {
           }}
         >
           <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-            Z důvodu zadání mohou zprávy číst pouze přihlášení uživatelé.
+            Zprávy mohou číst pouze přihlášení uživatelé.
             Níže je jen ukázka rozložení hlavní místnosti.
           </Typography>
           <List>

@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Controller
@@ -29,30 +30,23 @@ public class ChatController {
     @Autowired private UserRepository userRepository;
     @Autowired private ChatRoomRepository chatRoomRepository;
 
-    // --- 1. WEBSOCKET TEXT CHAT (OPRAVENO: @SendTo + Return) ---
     @MessageMapping("/message")
-    @SendTo("/chatroom/1") // Toto zajistí, že to Spring Boot pošle sám a hned
+    @SendTo("/chatroom/1")
     public PayloadMessage receivePublicMessage(@Payload PayloadMessage message) {
-        System.out.println("=== PUBLIC MSG RECEIVED ===");
-        // Pouze uložíme, neposíláme ručně (SendTo to udělá)
         return savePublicMessageToDB(message);
     }
 
-    // --- 2. REST API CHAT ---
     @PostMapping("/api/message")
     @ResponseBody
     public PayloadMessage postPublicMessage(@RequestBody PayloadMessage message) {
         PayloadMessage saved = savePublicMessageToDB(message);
-        // REST musí poslat ručně
         messagingTemplate.convertAndSend("/chatroom/" + saved.getReceiverChatRoomId(), saved);
         return saved;
     }
 
-    // --- Ukládací logika ---
     private PayloadMessage savePublicMessageToDB(PayloadMessage message) {
         try {
             ChatUser sender = userRepository.findChatUserByUsernameIgnoreCase(message.getSenderName());
-            // Hardcoded ID 1 pro jistotu, nebo parsovat z message
             Integer roomId = 1; 
             try { roomId = Integer.valueOf(message.getReceiverChatRoomId()); } catch (Exception e) {}
             
@@ -71,10 +65,9 @@ public class ChatController {
                 dbMessage.setSendTime(new Date());
                 messageRepository.save(dbMessage);
 
-                // Doplnění dat pro odeslání zpět klientům
                 message.setSenderAvatarUrl(sender.getAvatarUrl());
                 message.setDate(timezoneService.convertToUserTimezone(dbMessage.getSendTime().toInstant(), sender.getTimezone()));
-                message.setReceiverChatRoomId(String.valueOf(roomId)); // Ujištění že ID je správně
+                message.setReceiverChatRoomId(String.valueOf(roomId));
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -82,12 +75,12 @@ public class ChatController {
         return message;
     }
 
-    // --- 3. UPLOAD SOUBORU ---
     @PostMapping("/api/upload-file")
     @ResponseBody
     public PayloadMessage uploadFile(@RequestParam String username, 
                                      @RequestParam String receiverChatRoomId,
                                      @RequestParam(required = false) String receiverName,
+                                     @RequestParam(required = false) String id,
                                      @RequestParam MultipartFile file) {
         try {
             ChatUser sender = userRepository.findChatUserByUsernameIgnoreCase(username);
@@ -97,6 +90,12 @@ public class ChatController {
             boolean isImage = fileService.isImageFile(file.getOriginalFilename());
             
             PayloadMessage message = new PayloadMessage();
+            if (id != null && !id.isEmpty()) {
+                message.setId(id);
+            } else {
+                message.setId(UUID.randomUUID().toString());
+            }
+
             message.setSenderName(username);
             message.setSenderAvatarUrl(sender.getAvatarUrl());
             message.setReceiverChatRoomId(receiverChatRoomId);
@@ -110,9 +109,7 @@ public class ChatController {
             if (receiverName != null && !receiverName.isEmpty()) {
                 return handlePrivateMessage(message);
             } else {
-                // Uložíme
                 PayloadMessage saved = savePublicMessageToDB(message);
-                // A musíme poslat RUČNĚ (REST)
                 messagingTemplate.convertAndSend("/chatroom/" + receiverChatRoomId, saved);
                 return saved;
             }
@@ -122,7 +119,6 @@ public class ChatController {
         }
     }
 
-    // --- PRIVATE MESSAGES ---
     @MessageMapping("/private-message")
     public PayloadMessage receivePrivateMessage(@Payload PayloadMessage message) {
         return handlePrivateMessage(message);
@@ -162,7 +158,6 @@ public class ChatController {
         return message;
     }
 
-    // --- GETTERS (History, Unread...) ---
     @GetMapping("/api/history")
     @ResponseBody
     public List<PayloadMessage> getHistory(@RequestParam String chatRoomId, @RequestParam(required = false) String username) {
@@ -173,9 +168,9 @@ public class ChatController {
         return messageRepository.findByChatRoom_ChatIdOrderBySendTimeAsc(id).stream().map(m -> mapToPayload(m, userTimezone)).collect(Collectors.toList());
     }
 
-    // Pomocná metoda pro mapování DB message na Payload
     private PayloadMessage mapToPayload(Message m, String userTimezone) {
         PayloadMessage p = new PayloadMessage();
+        p.setId(UUID.randomUUID().toString());
         p.setSenderName(m.getChatUser().getUsername());
         p.setSenderAvatarUrl(m.getChatUser().getAvatarUrl());
         p.setReceiverChatRoomId(String.valueOf(m.getChatRoom().getChatId()));
@@ -203,6 +198,7 @@ public class ChatController {
         if (u1 != null && u2 != null) {
             return directMessageRepository.findConversationBetweenUsers(u1, u2).stream().map(dm -> {
                 PayloadMessage p = new PayloadMessage();
+                p.setId(UUID.randomUUID().toString());
                 p.setSenderName(dm.getSender().getUsername());
                 p.setSenderAvatarUrl(dm.getSender().getAvatarUrl());
                 p.setReceiverName(dm.getReceiver().getUsername());
@@ -230,6 +226,7 @@ public class ChatController {
         if (user != null) {
             return directMessageRepository.findUnreadMessages(user).stream().map(dm -> {
                 PayloadMessage p = new PayloadMessage();
+                p.setId(UUID.randomUUID().toString());
                 p.setSenderName(dm.getSender().getUsername());
                 p.setContent(dm.getContent());
                 p.setDate(timezoneService.convertToUserTimezone(dm.getSendTime().toInstant(), tz));
@@ -250,7 +247,6 @@ public class ChatController {
         }
     }
     
-    // ... avatar upload methods ...
     @PostMapping("/api/upload-avatar")
     @ResponseBody
     public String uploadAvatar(@RequestParam String username, @RequestParam MultipartFile file) {
@@ -265,11 +261,14 @@ public class ChatController {
         } catch (Exception e) {}
         return null;
     }
+    
     @GetMapping("/api/avatars") @ResponseBody public List<String> getAvatars() { return avatarService.getAllAvatars(); }
+    
     @PostMapping("/api/select-avatar") @ResponseBody public void selectAvatar(@RequestParam String username, @RequestParam int avatarIndex) {
         ChatUser user = userRepository.findByUsernameIgnoreCase(username).orElse(null);
         if (user != null) { user.setAvatarUrl(avatarService.getAvatarUrl(avatarIndex)); userRepository.save(user); }
     }
+    
     @GetMapping("/api/user/{username}") @ResponseBody public Object getUserInfo(@PathVariable String username) {
         ChatUser user = userRepository.findByUsernameIgnoreCase(username).orElse(null);
         if (user == null) return java.util.Map.of("username", username, "avatarUrl", "http://localhost:8081/avatars/cat.png");

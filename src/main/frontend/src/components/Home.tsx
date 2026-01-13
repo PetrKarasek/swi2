@@ -53,7 +53,7 @@ const Home: React.FC<HomeProps> = (props) => {
                   SWI2 Chat
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                  Jednoduchá víceuživatelská chatovací aplikace
+                  Víceuživatelská chatovací aplikace
                 </Typography>
               </Box>
             </Container>

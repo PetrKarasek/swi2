@@ -3,6 +3,8 @@ package cz.osu.swi22025.model.json;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class PayloadMessage {
+    private String id;
+
     private String senderName;
     private String receiverName;
     
@@ -19,8 +21,8 @@ public class PayloadMessage {
     private boolean isNotification;
     private String notificationType;
 
-    // --- KONSTRUKTORY ---
-    public PayloadMessage() {}
+    public PayloadMessage() {
+    }
 
     public PayloadMessage(String senderName, String receiverName, String receiverChatRoomId, String content, String date, String senderAvatarUrl, String messageType, String fileUrl, String fileName, boolean isNotification, String notificationType) {
         this.senderName = senderName;
@@ -36,9 +38,14 @@ public class PayloadMessage {
         this.notificationType = notificationType;
     }
 
-    // --- GETTERY A SETTERY (RUČNĚ VYPSANÉ PRO JISTOTU) ---
+    public String getId() {
+        return id;
+    }
 
-    // TOTO JE TA OPRAVA: Metoda se jmenuje přesně tak, jak ji service hledá
+    public void setId(String id) {
+        this.id = id;
+    }
+
     public void setIsNotification(boolean isNotification) {
         this.isNotification = isNotification;
     }
@@ -130,7 +137,8 @@ public class PayloadMessage {
     @Override
     public String toString() {
         return "PayloadMessage{" +
-                "senderName='" + senderName + '\'' +
+                "id='" + id + '\'' + 
+                ", senderName='" + senderName + '\'' +
                 ", content='" + content + '\'' +
                 ", messageType='" + messageType + '\'' +
                 '}';
