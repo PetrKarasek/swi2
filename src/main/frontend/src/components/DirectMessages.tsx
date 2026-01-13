@@ -61,6 +61,7 @@ const DirectMessages = ({
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isUserSelectOpen, setIsUserSelectOpen] = useState(false);
   const [userAvatars, setUserAvatars] = useState<{[key: string]: string}>({});
+  const [myAvatarUrl, setMyAvatarUrl] = useState<string>("http://localhost:8081/avatars/cat.png");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +85,24 @@ const DirectMessages = ({
     if (allUsers?.length > 0) loadUserAvatars();
   }, [allUsers, user?.username]);
 
-  const loadDirectHistory = async (targetUser: string) => {
+    useEffect(() => {
+        const loadMyAvatar = async () => {
+            if (!user?.username) return;
+            try {
+                const response = await axios.get(`http://localhost:8081/api/user/${user.username}`);
+                const url = response.data?.avatarUrl || "/avatars/cat.png";
+                // když je relativní, Avatar komponenta si to už umí převést,
+                // ale tady necháme konzistentně absolutní fallback:
+                setMyAvatarUrl(url.startsWith("http") ? url : `http://localhost:8081${url}`);
+            } catch (e) {
+                setMyAvatarUrl("http://localhost:8081/avatars/cat.png");
+            }
+        };
+
+        loadMyAvatar();
+    }, [user?.username]);
+
+    const loadDirectHistory = async (targetUser: string) => {
     if (!user || !targetUser) return;
     try {
       const params = new URLSearchParams([["user1", user.username], ["user2", targetUser]]);
@@ -217,20 +235,54 @@ const DirectMessages = ({
               {Array.isArray(activeMessages) && activeMessages.map((msg, index) => {
                 if (!msg) return null;
                 const isMe = msg.senderName === user?.username;
-                const avatar = userAvatars[msg.senderName] || "http://localhost:8081/avatars/cat.png";
-                const fileInfo = extractFileInfo(msg);
+                  const avatar = userAvatars[msg.senderName] || "/avatars/cat.png";
+                  const fileInfo = extractFileInfo(msg);
                 const getFullUrl = (url: string) => url.startsWith('http') || url.startsWith('blob:') ? url : `http://localhost:8081${url}`;
                 
                 return (
                   <ListItem key={index} sx={{ p: 0, mb: 1 }}>
-                    <Box sx={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%', gap: 1 }}>
-                      {!isMe && <Avatar avatarUrl={avatar} username={msg.senderName} size={32} />}
-                      <Box sx={{ maxWidth: '70%', p: 1.5, borderRadius: 2, bgcolor: isMe ? '#1976d2' : '#ffffff', color: isMe ? 'white' : 'black', boxShadow: 1 }}>
-                        {fileInfo && (<Box sx={{ mb: 1 }}>{fileInfo.isImage ? <Box component="img" src={getFullUrl(fileInfo.fileUrl)} alt={fileInfo.fileName} sx={{ maxWidth: '100%', maxHeight: 200, borderRadius: 1, cursor: 'pointer', '&:hover': { opacity: 0.8 } }} onClick={() => window.open(getFullUrl(fileInfo.fileUrl), '_blank')} /> : <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'rgba(0,0,0,0.1)', borderRadius: 1, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(0,0,0,0.2)' } }} onClick={() => window.open(getFullUrl(fileInfo.fileUrl), '_blank')}><DescriptionIcon sx={{ fontSize: 20 }} /><Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{fileInfo.fileName}</Typography></Box>}</Box>)}
-                        {msg.content && !fileInfo && <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>{msg.content}</Typography>}
-                        <Typography variant="caption" sx={{ display: 'block', mt: 0.5, opacity: 0.7, fontSize: '0.7rem', textAlign: isMe ? 'right' : 'left' }}>{safeFormatDate(msg.date)}</Typography>
+                      <Box sx={{ display: 'flex', justifyContent: isMe ? 'flex-end' : 'flex-start', width: '100%', gap: 1, alignItems: 'flex-start' }}>
+                          {/* Avatar vlevo pro protistranu */}
+                          {!isMe && <Avatar avatarUrl={avatar} username={msg.senderName} size={32} />}
+
+                          <Box sx={{ maxWidth: '70%', p: 1.5, borderRadius: 2, bgcolor: isMe ? '#1976d2' : '#ffffff', color: isMe ? 'white' : 'black', boxShadow: 1 }}>
+                              {fileInfo && (
+                                  <Box sx={{ mb: 1 }}>
+                                      {fileInfo.isImage ? (
+                                          <Box
+                                              component="img"
+                                              src={getFullUrl(fileInfo.fileUrl)}
+                                              alt={fileInfo.fileName}
+                                              sx={{ maxWidth: '100%', maxHeight: 200, borderRadius: 1, cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
+                                              onClick={() => window.open(getFullUrl(fileInfo.fileUrl), '_blank')}
+                                          />
+                                      ) : (
+                                          <Box
+                                              sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'rgba(0,0,0,0.1)', borderRadius: 1, cursor: 'pointer', '&:hover': { bgcolor: 'rgba(0,0,0,0.2)' } }}
+                                              onClick={() => window.open(getFullUrl(fileInfo.fileUrl), '_blank')}
+                                          >
+                                              <DescriptionIcon sx={{ fontSize: 20 }} />
+                                              <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>{fileInfo.fileName}</Typography>
+                                          </Box>
+                                      )}
+                                  </Box>
+                              )}
+
+                              {msg.content && !fileInfo && (
+                                  <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>{msg.content}</Typography>
+                              )}
+
+                              <Typography
+                                  variant="caption"
+                                  sx={{ display: 'block', mt: 0.5, opacity: 0.7, fontSize: '0.7rem', textAlign: isMe ? 'right' : 'left' }}
+                              >
+                                  {safeFormatDate(msg.date)}
+                              </Typography>
+                          </Box>
+
+                          {/* ✅ Avatar napravo pro mě */}
+                          {isMe && <Avatar avatarUrl={myAvatarUrl} username={user?.username || "me"} size={32} />}
                       </Box>
-                    </Box>
                   </ListItem>
                 );
               })}

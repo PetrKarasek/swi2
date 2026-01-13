@@ -168,4 +168,103 @@ public class DesktopClient {
         return avatarUrl == null ? "/avatars/cat.png" : avatarUrl.toString();
     }
 
+    // ===== USERS LIST =====
+
+    /**
+     * Backend endpoint used by web: GET /users -> ["admin1", "admin2", ...]
+     */
+    public List<String> getAllUsers() throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/users"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 300) {
+            throw new IOException(response.body() == null ? "Failed to fetch users" : response.body());
+        }
+
+        return objectMapper.readValue(response.body(), new TypeReference<List<String>>() {});
+    }
+
+// ===== DIRECT MESSAGES =====
+
+    public void sendDirectMessage(UserToken user, String receiverName, String content)
+            throws IOException, InterruptedException {
+
+        PayloadMessage msg = new PayloadMessage();
+        msg.setSenderName(user.getUsername());
+        msg.setReceiverName(receiverName);
+        msg.setReceiverChatRoomId("");
+        msg.setContent(content);
+        msg.setDate(java.time.Instant.now().toString());
+
+        String body = objectMapper.writeValueAsString(msg);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/api/private-message"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 300) {
+            throw new IOException(response.body() == null ? "DM send failed" : response.body());
+        }
+    }
+
+    public List<PayloadMessage> getDirectHistory(String user1, String user2)
+            throws IOException, InterruptedException {
+
+        String url = BASE_URL + "/api/direct-history?user1="
+                + java.net.URLEncoder.encode(user1, StandardCharsets.UTF_8)
+                + "&user2="
+                + java.net.URLEncoder.encode(user2, StandardCharsets.UTF_8);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 300) {
+            throw new IOException(response.body() == null ? "Failed to fetch DM history" : response.body());
+        }
+
+        return objectMapper.readValue(response.body(), new TypeReference<List<PayloadMessage>>() {});
+    }
+
+    public List<PayloadMessage> getUnreadDirectMessages(String username)
+            throws IOException, InterruptedException {
+        String url = BASE_URL + "/api/unread-messages?username="
+                + java.net.URLEncoder.encode(username, StandardCharsets.UTF_8);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 300) {
+            throw new IOException(response.body() == null ? "Failed to fetch unread DMs" : response.body());
+        }
+
+        return objectMapper.readValue(response.body(), new TypeReference<List<PayloadMessage>>() {});
+    }
+
+    public void markDirectMessagesRead(String username) throws IOException, InterruptedException {
+        String url = BASE_URL + "/api/mark-messages-read?username="
+                + java.net.URLEncoder.encode(username, StandardCharsets.UTF_8);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 300) {
+            throw new IOException(response.body() == null ? "Failed to mark DMs as read" : response.body());
+        }
+    }
+
 }

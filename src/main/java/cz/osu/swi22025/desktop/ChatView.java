@@ -75,6 +75,15 @@ public class ChatView extends BorderPane {
         HBox statusBox = new HBox(6, statusDot, statusText);
         statusBox.setAlignment(Pos.CENTER_LEFT);
 
+        Button dmBtn = new Button("DMs");
+        dmBtn.setStyle("""
+          -fx-background-color: transparent;
+          -fx-border-color: #d1d5db;
+          -fx-border-radius: 6;
+          -fx-padding: 6 14;""");
+        dmBtn.setOnAction(e -> openDirectMessages());
+
+
         // Avatar vedle LOGOUT (klikací)
         headerAvatarView = createHeaderAvatar(DEFAULT_AVATAR_URL);
         headerAvatarView.setOnMouseClicked(e -> openAvatarPicker());
@@ -98,6 +107,7 @@ public class ChatView extends BorderPane {
         HBox header = new HBox(16,
                 title,
                 spacer,
+                dmBtn,
                 statusBox,
                 headerAvatarView,
                 logoutBtn
@@ -369,6 +379,19 @@ public class ChatView extends BorderPane {
                 System.out.println("Avatar update failed: " + ex.getMessage());
             }
         }).start();
+    }
+
+    private void openDirectMessages() {
+        // Open in a separate window so public chat keeps running.
+        Stage owner = (Stage) getScene().getWindow();
+        Stage dmStage = new Stage();
+        dmStage.initOwner(owner);
+        dmStage.setTitle("Direct Messages · " + user.getUsername());
+
+        DirectMessagesView dmView = new DirectMessagesView(client, user, avatarCache);
+
+        dmStage.setScene(new javafx.scene.Scene(dmView, 980, 640));
+        dmStage.show();
     }
 
     // ===== Timestamp helpers =====
