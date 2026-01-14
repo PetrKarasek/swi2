@@ -33,12 +33,22 @@ public class ChatController {
     @MessageMapping("/message")
     @SendTo("/chatroom/1")
     public PayloadMessage receivePublicMessage(@Payload PayloadMessage message) {
+
+        if (message.getId() == null || message.getId().isBlank()) {
+            message.setId(UUID.randomUUID().toString());
+        }
+
         return savePublicMessageToDB(message);
     }
 
     @PostMapping("/api/message")
     @ResponseBody
     public PayloadMessage postPublicMessage(@RequestBody PayloadMessage message) {
+
+        if (message.getId() == null || message.getId().isBlank()) {
+            message.setId(UUID.randomUUID().toString());
+        }
+
         PayloadMessage saved = savePublicMessageToDB(message);
         messagingTemplate.convertAndSend("/chatroom/" + saved.getReceiverChatRoomId(), saved);
         return saved;
@@ -132,6 +142,11 @@ public class ChatController {
     }
 
     private PayloadMessage handlePrivateMessage(PayloadMessage message) {
+
+        if (message.getId() == null || message.getId().isBlank()) {
+            message.setId(UUID.randomUUID().toString());
+        }
+
         ChatUser sender = userRepository.findChatUserByUsernameIgnoreCase(message.getSenderName());
         ChatUser receiver = userRepository.findChatUserByUsernameIgnoreCase(message.getReceiverName());
 

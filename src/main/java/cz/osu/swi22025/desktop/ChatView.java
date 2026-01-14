@@ -16,18 +16,27 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 import javafx.util.Duration;
-
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import javafx.scene.control.Hyperlink;
+import javafx.stage.FileChooser;
+
+import java.util.Locale;
+
 
 public class ChatView extends BorderPane {
 
     private static final String BASE_URL = "http://localhost:8081";
     private static final String DEFAULT_AVATAR_URL = "/avatars/cat.png";
+
+    private java.io.File pendingFile = null;
+    private final Label pendingFileLabel = new Label("");
+    private final Button clearFileBtn = new Button("✕");
+    private final Button attachBtn = new Button("📎");
 
     private final DesktopClient client;
     private final UserToken user;
@@ -36,12 +45,17 @@ public class ChatView extends BorderPane {
 
     private final TextField input = new TextField();
 
+    private Button dmBtn;
+
     // Bubble UI
     private final VBox messagesBox = new VBox(8);
     private final ScrollPane scrollPane = new ScrollPane(messagesBox);
 
     private Timeline queuePoller;
     private Timeline historyPoller;
+
+    private Timeline dmUnreadPoller;
+    private final Label dmBadge = new Label(""); // červená tečka / číslo
 
     // Dedupe (history + queue mohou vracet stejné zprávy)
     private final Set<String> seen = new HashSet<>();
@@ -75,14 +89,39 @@ public class ChatView extends BorderPane {
         HBox statusBox = new HBox(6, statusDot, statusText);
         statusBox.setAlignment(Pos.CENTER_LEFT);
 
-        Button dmBtn = new Button("DMs");
-        dmBtn.setStyle("""
-          -fx-background-color: transparent;
-          -fx-border-color: #d1d5db;
-          -fx-border-radius: 6;
-          -fx-padding: 6 14;""");
+        dmBtn = new Button("DMs");
         dmBtn.setOnAction(e -> openDirectMessages());
+        dmBtn.setStyle("""
+           -fx-background-color: transparent;
+           -fx-border-color: #d1d5db;
+           -fx-border-radius: 6;
+           -fx-padding: 6 14;""");
 
+        // ✅ badge styling (number)
+        dmBadge.setVisible(false);
+
+        // 🔥 DŮLEŽITÉ: badge musí být managed=true, jinak ho StackPane nelayoutuje
+        dmBadge.setManaged(true);
+
+        // aby badge neblokoval kliknutí na tlačítko
+        dmBadge.setMouseTransparent(true);
+
+        dmBadge.setAlignment(Pos.CENTER);
+        dmBadge.setStyle("""
+         -fx-background-color: #ef4444;
+         -fx-text-fill: white;
+         -fx-font-size: 10px;
+         -fx-font-weight: bold;
+         -fx-background-radius: 999;""");
+
+        // výchozí velikost pro 1 číslici
+        dmBadge.setMinSize(16, 16);
+        dmBadge.setPrefSize(16, 16);
+
+        // StackPane: badge do pravého horního rohu tlačítka
+        StackPane dmButtonWithBadge = new StackPane(dmBtn, dmBadge);
+        StackPane.setAlignment(dmBadge, Pos.TOP_RIGHT);
+        StackPane.setMargin(dmBadge, new Insets(-6, -6, 0, 0));
 
         // Avatar vedle LOGOUT (klikací)
         headerAvatarView = createHeaderAvatar(DEFAULT_AVATAR_URL);
@@ -107,7 +146,7 @@ public class ChatView extends BorderPane {
         HBox header = new HBox(16,
                 title,
                 spacer,
-                dmBtn,
+                dmButtonWithBadge,
                 statusBox,
                 headerAvatarView,
                 logoutBtn
@@ -135,10 +174,26 @@ public class ChatView extends BorderPane {
         input.setPromptText("Napiš zprávu…");
         Button send = new Button("Send");
 
+        attachBtn.setOnAction(e -> chooseFile());
+        attachBtn.setStyle("-fx-padding: 6 10;");
+
+        pendingFileLabel.setStyle("-fx-opacity: 0.75;");
+        pendingFileLabel.setMaxWidth(240);
+        pendingFileLabel.setWrapText(false);
+
+        clearFileBtn.setOnAction(e -> clearPendingFile());
+        clearFileBtn.setDisable(true);
+
+        HBox fileChip = new HBox(6, pendingFileLabel, clearFileBtn);
+        fileChip.setAlignment(Pos.CENTER_LEFT);
+
         send.setOnAction(e -> sendMessage());
         input.setOnAction(e -> sendMessage());
 
-        HBox bottom = new HBox(8, input, send);
+        VBox leftControls = new VBox(6, fileChip);
+        leftControls.setAlignment(Pos.CENTER_LEFT);
+
+        HBox bottom = new HBox(8, attachBtn, input, send, fileChip);
         bottom.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(input, Priority.ALWAYS);
         bottom.setPadding(new Insets(10, 0, 0, 0));
@@ -150,6 +205,7 @@ public class ChatView extends BorderPane {
         // Polling (queue = offline, history = online)
         startQueuePolling();
         startHistoryPolling();
+        startDmUnreadPolling();
 
         // Stop timers when window closes
         sceneProperty().addListener((obs, oldScene, newScene) -> {
@@ -172,23 +228,48 @@ public class ChatView extends BorderPane {
             historyPoller.stop();
             historyPoller = null;
         }
+        if (dmUnreadPoller != null) {
+            dmUnreadPoller.stop();
+            dmUnreadPoller = null;
+        }
     }
 
     private void sendMessage() {
         String text = input.getText().trim();
-        if (text.isEmpty()) return;
+        if (text.isEmpty() && pendingFile == null) return;
 
         input.clear();
 
-        // Nezobrazujeme lokálně, aby nevznikaly duplicity.
-        // Zpráva se objeví z /api/history během chvilky.
-        new Thread(() -> {
-            try {
-                client.sendMessage(user, text);
-            } catch (Exception ex) {
-                System.out.println("Send error: " + ex.getMessage());
-            }
-        }).start();
+        // text
+        if (!text.isEmpty()) {
+            new Thread(() -> {
+                try {
+                    client.sendMessage(user, text);
+                } catch (Exception ex) {
+                    System.out.println("Send error: " + ex.getMessage());
+                }
+            }).start();
+        }
+
+        // file
+        if (pendingFile != null) {
+            java.io.File fileToSend = pendingFile;
+            clearPendingFile();
+
+            new Thread(() -> {
+                try {
+                    PayloadMessage uploaded = client.uploadFile(
+                            user.getUsername(),
+                            "1",     // public room id
+                            null,    // receiverName null => public
+                            fileToSend.toPath()
+                    );
+
+                } catch (Exception ex) {
+                    System.out.println("Upload error: " + ex.getMessage());
+                }
+            }).start();
+        }
     }
 
     private void startQueuePolling() {
@@ -199,8 +280,9 @@ public class ChatView extends BorderPane {
                             client.pickupMessages(user.getUserId().toString());
                     if (list != null && !list.isEmpty()) {
                         Platform.runLater(() -> {
+                            boolean stick = isNearBottom();
                             for (var m : list) appendMessage(m);
-                            scrollToBottom();
+                            if (stick) scrollToBottom();
                         });
                     }
                 } catch (Exception ex) {
@@ -219,18 +301,15 @@ public class ChatView extends BorderPane {
                     List<PayloadMessage> list = client.getHistory("1");
                     if (list != null && !list.isEmpty()) {
                         Platform.runLater(() -> {
-                            // pokud by se historie restartla / zkrátila, začni od nuly
-                            if (list.size() < lastHistorySize) {
-                                lastHistorySize = 0;
-                            }
+                            boolean stick = isNearBottom();
 
-                            // přidej jen nové zprávy, které ještě nebyly
+                            if (list.size() < lastHistorySize) lastHistorySize = 0;
                             for (int i = lastHistorySize; i < list.size(); i++) {
                                 appendMessage(list.get(i));
                             }
-
                             lastHistorySize = list.size();
-                            scrollToBottom();
+
+                            if (stick) scrollToBottom();
                         });
                     }
                 } catch (Exception ex) {
@@ -240,6 +319,54 @@ public class ChatView extends BorderPane {
         }));
         historyPoller.setCycleCount(Timeline.INDEFINITE);
         historyPoller.play();
+    }
+
+    private void startDmUnreadPolling() {
+        if (dmUnreadPoller != null) dmUnreadPoller.stop();
+
+        dmUnreadPoller = new Timeline(new KeyFrame(Duration.millis(300), e -> {
+            new Thread(() -> {
+                try {
+                    List<PayloadMessage> unread = client.getUnreadDirectMessages(user.getUsername());
+                    int count = (unread == null) ? 0 : unread.size();
+
+                    Platform.runLater(() -> updateDmBadge(count));
+                } catch (Exception ex) {
+                    System.out.println("DM badge poll error: " + ex.getMessage());
+                }
+            }).start();
+        }));
+
+        dmUnreadPoller.setCycleCount(Timeline.INDEFINITE);
+        dmUnreadPoller.play();
+    }
+
+    private void updateDmBadge(int count) {
+        // tlačítko vždy bez čísla
+        dmBtn.setText("DMs");
+
+        if (count <= 0) {
+            dmBadge.setVisible(false);
+            dmBadge.setText("");
+            // managed necháváme TRUE pořád – StackPane to zvládne a je to stabilní
+            return;
+        }
+
+        dmBadge.setText(count > 99 ? "99+" : String.valueOf(count));
+        dmBadge.setVisible(true);
+
+        // velikost badge podle délky textu
+        if (count > 9) {
+            dmBadge.setMinSize(24, 16);
+            dmBadge.setPrefSize(24, 16);
+        } else {
+            dmBadge.setMinSize(16, 16);
+            dmBadge.setPrefSize(16, 16);
+        }
+    }
+
+    private boolean isNearBottom() {
+        return scrollPane.getVvalue() > 0.92;
     }
 
     private void scrollToBottom() {
@@ -272,11 +399,39 @@ public class ChatView extends BorderPane {
         Label meta = new Label(timeText + "  •  " + (sender.isBlank() ? "UNKNOWN" : sender));
         meta.setStyle("-fx-font-size: 11px; -fx-opacity: 0.75;");
 
-        Label body = new Label(content);
-        body.setWrapText(true);
-        body.setStyle("-fx-font-size: 13px;");
+        javafx.scene.Node bodyNode;
 
-        VBox bubble = new VBox(3, meta, body);
+        FileInfo fi = extractFileInfo(msg);
+        if (fi != null) {
+            if (fi.isImage()) {
+                ImageView preview = new ImageView(new Image(fi.url(), 0, 200, true, true));
+                preview.setPreserveRatio(true);
+                preview.setSmooth(true);
+                preview.setOnMouseClicked(e -> client.openInBrowser(fi.url()));
+
+                Label fn = new Label(fi.name());
+                fn.setStyle("-fx-font-size: 11px; -fx-opacity: 0.75;");
+
+                VBox box = new VBox(6, preview, fn);
+                bodyNode = box;
+            } else {
+                Hyperlink link = new Hyperlink(fi.name());
+                link.setOnAction(e -> client.openInBrowser(fi.url()));
+
+                Label hint = new Label(fi.url());
+                hint.setStyle("-fx-font-size: 10px; -fx-opacity: 0.6;");
+
+                VBox box = new VBox(4, link, hint);
+                bodyNode = box;
+            }
+        } else {
+            Label body = new Label(content);
+            body.setWrapText(true);
+            body.setStyle("-fx-font-size: 13px;");
+            bodyNode = body;
+        }
+
+        VBox bubble = new VBox(3, meta, bodyNode);
         bubble.setPadding(new Insets(8, 10, 8, 10));
         bubble.setMaxWidth(520);
 
@@ -290,20 +445,25 @@ public class ChatView extends BorderPane {
         ImageView msgAvatar = createMessageAvatar(DEFAULT_AVATAR_URL);
 
         String cached = avatarCache.get(sender);
-        if (cached != null && !cached.isBlank()) {
-            msgAvatar.setImage(new Image(BASE_URL + cached, 24, 24, true, true));
-        } else {
-            // hned zobraz default a na pozadí dotáhni reálný
-            new Thread(() -> {
-                try {
-                    String url = client.getAvatarUrlByUsername(sender);
-                    avatarCache.put(sender, url);
+        String initial = (cached != null && !cached.isBlank()) ? cached : DEFAULT_AVATAR_URL;
+        msgAvatar.setImage(new Image(BASE_URL + initial, 24, 24, true, true));
+
+// ✅ vždy na pozadí ověř, jestli se avatar nezměnil (např. změna z webu)
+        new Thread(() -> {
+            try {
+                String fresh = client.getAvatarUrlByUsername(sender);
+                if (fresh == null || fresh.isBlank()) fresh = DEFAULT_AVATAR_URL;
+
+                String prev = avatarCache.get(sender);
+                if (prev == null || !prev.equals(fresh)) {
+                    avatarCache.put(sender, fresh);
+                    String finalFresh = fresh;
                     Platform.runLater(() ->
-                            msgAvatar.setImage(new Image(BASE_URL + url, 24, 24, true, true))
+                            msgAvatar.setImage(new Image(BASE_URL + finalFresh, 24, 24, true, true))
                     );
-                } catch (Exception ignored) {}
-            }).start();
-        }
+                }
+            } catch (Exception ignored) {}
+        }).start();
 
         HBox row;
         if (mine) {
@@ -324,13 +484,54 @@ public class ChatView extends BorderPane {
         return s == null ? "" : s.trim();
     }
 
+    private record FileInfo(boolean isImage, String url, String name) {}
+
+    private FileInfo extractFileInfo(PayloadMessage msg) {
+        String fileUrl = safe(msg.getFileUrl());
+        String fileName = safe(msg.getFileName());
+        String type = safe(msg.getMessageType()).toUpperCase(Locale.ROOT);
+
+        // 1) moderní forma (fileUrl v payload)
+        if (!fileUrl.isBlank()) {
+            boolean isImage = "IMAGE".equals(type) || looksLikeImage(fileName, fileUrl);
+            return new FileInfo(isImage, client.fullUrl(fileUrl), fileName.isBlank() ? "file" : fileName);
+        }
+
+        // 2) fallback z historie: content = "[FILE] name | /uploads/.."
+        String content = safe(msg.getContent());
+        if (content.startsWith("[FILE]")) {
+            String rest = content.substring(6).trim();
+            String[] parts = rest.split("\\|");
+            if (parts.length >= 2) {
+                String name = parts[0].trim();
+                String url = parts[1].trim();
+                boolean isImage = looksLikeImage(name, url);
+                return new FileInfo(isImage, client.fullUrl(url), name.isBlank() ? "file" : name);
+            }
+        }
+
+        return null;
+    }
+
+    private boolean looksLikeImage(String name, String url) {
+        String s = (name + " " + url).toLowerCase(Locale.ROOT);
+        return s.endsWith(".png") || s.endsWith(".jpg") || s.endsWith(".jpeg") || s.endsWith(".gif") || s.endsWith(".webp") || s.endsWith(".bmp");
+    }
+
     // ===== Avatar helpers =====
 
     private ImageView createHeaderAvatar(String avatarUrl) {
         ImageView avatar = new ImageView(new Image(BASE_URL + avatarUrl, 28, 28, true, true));
         avatar.setFitWidth(28);
         avatar.setFitHeight(28);
-        avatar.setStyle("-fx-cursor: hand; -fx-background-radius: 999;");
+        avatar.setPreserveRatio(true);
+        avatar.setSmooth(true);
+
+        // ✅ circle clip
+        javafx.scene.shape.Circle clip = new javafx.scene.shape.Circle(14, 14, 14);
+        avatar.setClip(clip);
+
+        avatar.setStyle("-fx-cursor: hand;");
         return avatar;
     }
 
@@ -338,7 +539,13 @@ public class ChatView extends BorderPane {
         ImageView avatar = new ImageView(new Image(BASE_URL + avatarUrl, 24, 24, true, true));
         avatar.setFitWidth(24);
         avatar.setFitHeight(24);
-        avatar.setStyle("-fx-background-radius: 999;");
+        avatar.setPreserveRatio(true);
+        avatar.setSmooth(true);
+
+        // ✅ circle clip
+        javafx.scene.shape.Circle clip = new javafx.scene.shape.Circle(12, 12, 12);
+        avatar.setClip(clip);
+
         return avatar;
     }
 
@@ -382,7 +589,9 @@ public class ChatView extends BorderPane {
     }
 
     private void openDirectMessages() {
-        // Open in a separate window so public chat keeps running.
+        // ✅ jen lokálně skryj badge – server nemarkuj, ať DM okno vidí unread u userů
+        updateDmBadge(0);
+
         Stage owner = (Stage) getScene().getWindow();
         Stage dmStage = new Stage();
         dmStage.initOwner(owner);
@@ -439,5 +648,22 @@ public class ChatView extends BorderPane {
         } catch (DateTimeParseException ignored) {}
 
         return ZonedDateTime.now(zone);
+    }
+
+    private void chooseFile() {
+        FileChooser fc = new FileChooser();
+        fc.setTitle("Select a file");
+        java.io.File f = fc.showOpenDialog(getScene().getWindow());
+        if (f == null) return;
+
+        pendingFile = f;
+        pendingFileLabel.setText(f.getName());
+        clearFileBtn.setDisable(false);
+    }
+
+    private void clearPendingFile() {
+        pendingFile = null;
+        pendingFileLabel.setText("");
+        clearFileBtn.setDisable(true);
     }
 }

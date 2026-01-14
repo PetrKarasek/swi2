@@ -12,6 +12,9 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.*;
 import javafx.util.Duration;
+import javafx.scene.control.Hyperlink;
+import javafx.stage.FileChooser;
+import java.util.Locale;
 
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -36,6 +39,11 @@ public class DirectMessagesView extends BorderPane {
     private final DesktopClient client;
     private final UserToken me;
     private final AvatarCache avatarCache;
+
+    private java.io.File pendingFile = null;
+    private final Label pendingFileLabel = new Label("");
+    private final Button clearFileBtn = new Button("✕");
+    private final Button attachBtn = new Button("📎");
 
     // Left: user list
     private final ListView<String> usersList = new ListView<>();
@@ -91,6 +99,9 @@ public class DirectMessagesView extends BorderPane {
                 av.setPreserveRatio(true);
                 av.setSmooth(true);
 
+                javafx.scene.shape.Circle clip = new javafx.scene.shape.Circle(13, 13, 13);
+                av.setClip(clip);
+
                 badge.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-padding: 2 7; -fx-background-radius: 999; -fx-font-size: 11px;");
                 badge.setVisible(false);
 
@@ -115,15 +126,19 @@ public class DirectMessagesView extends BorderPane {
                 String url = (cached == null || cached.isBlank()) ? DEFAULT_AVATAR_URL : cached;
                 av.setImage(new Image(BASE_URL + url, 26, 26, true, true));
 
-                if (cached == null) {
-                    new Thread(() -> {
-                        try {
-                            String real = client.getAvatarUrlByUsername(item);
-                            avatarCache.put(item, real);
-                            Platform.runLater(() -> av.setImage(new Image(BASE_URL + real, 26, 26, true, true)));
-                        } catch (Exception ignored) {}
-                    }).start();
-                }
+                new Thread(() -> {
+                    try {
+                        String fresh = client.getAvatarUrlByUsername(item);
+                        if (fresh == null || fresh.isBlank()) fresh = DEFAULT_AVATAR_URL;
+
+                        String prev = avatarCache.get(item);
+                        if (prev == null || !prev.equals(fresh)) {
+                            avatarCache.put(item, fresh);
+                            String finalFresh = fresh;
+                            Platform.runLater(() -> av.setImage(new Image(BASE_URL + finalFresh, 26, 26, true, true)));
+                        }
+                    } catch (Exception ignored) {}
+                }).start();
 
                 int unread = unreadByUser.getOrDefault(item, 0);
                 badge.setText(String.valueOf(unread));
@@ -158,7 +173,20 @@ public class DirectMessagesView extends BorderPane {
         sendBtn.setOnAction(e -> sendDm());
         input.setOnAction(e -> sendDm());
 
-        HBox bottom = new HBox(8, input, sendBtn);
+        attachBtn.setOnAction(e -> chooseFile());
+        attachBtn.setStyle("-fx-padding: 6 10;");
+
+        pendingFileLabel.setStyle("-fx-opacity: 0.75;");
+        pendingFileLabel.setMaxWidth(240);
+        pendingFileLabel.setWrapText(false);
+
+        clearFileBtn.setOnAction(e -> clearPendingFile());
+        clearFileBtn.setDisable(true);
+
+        HBox fileChip = new HBox(6, pendingFileLabel, clearFileBtn);
+        fileChip.setAlignment(Pos.CENTER_LEFT);
+
+        HBox bottom = new HBox(8, attachBtn, input, sendBtn, fileChip);
         bottom.setAlignment(Pos.CENTER_LEFT);
         bottom.setPadding(new Insets(10));
         HBox.setHgrow(input, Priority.ALWAYS);
@@ -245,7 +273,7 @@ public class DirectMessagesView extends BorderPane {
     private void startHistoryPolling(String peer) {
         if (dmHistoryPoller != null) dmHistoryPoller.stop();
 
-        dmHistoryPoller = new Timeline(new KeyFrame(Duration.millis(350), e -> {
+        dmHistoryPoller = new Timeline(new KeyFrame(Duration.millis(300), e -> {
             new Thread(() -> {
                 try {
                     if (activePeer == null || !activePeer.equals(peer)) return;
@@ -255,6 +283,8 @@ public class DirectMessagesView extends BorderPane {
 
                     List<PayloadMessage> finalList = list;
                     Platform.runLater(() -> {
+                        boolean stick = isNearBottom();
+
                         if (finalList.size() < lastHistorySize) lastHistorySize = 0;
 
                         for (int i = lastHistorySize; i < finalList.size(); i++) {
@@ -262,7 +292,8 @@ public class DirectMessagesView extends BorderPane {
                         }
 
                         lastHistorySize = finalList.size();
-                        scrollToBottom();
+
+                        if (stick) scrollToBottom();
                     });
                 } catch (Exception ignored) {}
             }).start();
@@ -273,7 +304,7 @@ public class DirectMessagesView extends BorderPane {
     }
 
     private void startUnreadPolling() {
-        unreadPoller = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+        unreadPoller = new Timeline(new KeyFrame(Duration.millis(300), e -> {
             new Thread(() -> {
                 try {
                     List<PayloadMessage> unread = client.getUnreadDirectMessages(me.getUsername());
@@ -295,7 +326,9 @@ public class DirectMessagesView extends BorderPane {
                         if (activePeer != null) unreadByUser.put(activePeer, 0);
                         usersList.refresh();
                     });
-                } catch (Exception ignored) {}
+                } catch (Exception ex) {
+                    System.out.println("DM unread poll error: " + ex.getMessage());
+                }
             }).start();
         }));
 
@@ -305,16 +338,38 @@ public class DirectMessagesView extends BorderPane {
 
     private void sendDm() {
         if (activePeer == null || activePeer.isBlank()) return;
+
         String text = input.getText().trim();
-        if (text.isEmpty()) return;
+        if (text.isEmpty() && pendingFile == null) return;
 
         input.clear();
 
-        new Thread(() -> {
-            try {
-                client.sendDirectMessage(me, activePeer, text);
-            } catch (Exception ignored) {}
-        }).start();
+        // text
+        if (!text.isEmpty()) {
+            new Thread(() -> {
+                try {
+                    client.sendDirectMessage(me, activePeer, text);
+                } catch (Exception ignored) {}
+            }).start();
+        }
+
+        // file
+        if (pendingFile != null) {
+            java.io.File fileToSend = pendingFile;
+            clearPendingFile();
+
+            new Thread(() -> {
+                try {
+                    PayloadMessage uploaded = client.uploadFile(
+                            me.getUsername(),
+                            "",          // DM = empty receiverChatRoomId
+                            activePeer,  // receiverName
+                            fileToSend.toPath()
+                    );
+
+                } catch (Exception ignored) {}
+            }).start();
+        }
     }
 
     private void appendMessage(PayloadMessage msg) {
@@ -341,11 +396,39 @@ public class DirectMessagesView extends BorderPane {
         Label meta = new Label(timeText + "  •  " + sender);
         meta.setStyle("-fx-font-size: 11px; -fx-opacity: 0.75;");
 
-        Label body = new Label(content);
-        body.setWrapText(true);
-        body.setStyle("-fx-font-size: 13px;");
+        javafx.scene.Node bodyNode;
 
-        VBox bubble = new VBox(3, meta, body);
+        FileInfo fi = extractFileInfo(msg);
+        if (fi != null) {
+            if (fi.isImage()) {
+                ImageView preview = new ImageView(new Image(fi.url(), 0, 200, true, true));
+                preview.setPreserveRatio(true);
+                preview.setSmooth(true);
+                preview.setOnMouseClicked(e -> client.openInBrowser(fi.url()));
+
+                Label fn = new Label(fi.name());
+                fn.setStyle("-fx-font-size: 11px; -fx-opacity: 0.75;");
+
+                VBox box = new VBox(6, preview, fn);
+                bodyNode = box;
+            } else {
+                Hyperlink link = new Hyperlink(fi.name());
+                link.setOnAction(e -> client.openInBrowser(fi.url()));
+
+                Label hint = new Label(fi.url());
+                hint.setStyle("-fx-font-size: 10px; -fx-opacity: 0.6;");
+
+                VBox box = new VBox(4, link, hint);
+                bodyNode = box;
+            }
+        } else {
+            Label body = new Label(content);
+            body.setWrapText(true);
+            body.setStyle("-fx-font-size: 13px;");
+            bodyNode = body;
+        }
+
+        VBox bubble = new VBox(3, meta, bodyNode);
         bubble.setPadding(new Insets(8, 10, 8, 10));
         bubble.setMaxWidth(520);
 
@@ -361,6 +444,9 @@ public class DirectMessagesView extends BorderPane {
         msgAvatar.setFitHeight(24);
         msgAvatar.setPreserveRatio(true);
         msgAvatar.setSmooth(true);
+
+        javafx.scene.shape.Circle clip = new javafx.scene.shape.Circle(12, 12, 12);
+        msgAvatar.setClip(clip);
 
         String avatarUrl = safe(msg.getSenderAvatarUrl());
         if (avatarUrl.isBlank()) {
@@ -394,12 +480,50 @@ public class DirectMessagesView extends BorderPane {
         messagesBox.getChildren().add(row);
     }
 
+    private boolean isNearBottom() {
+        return scrollPane.getVvalue() > 0.92;
+    }
+
     private void scrollToBottom() {
         Platform.runLater(() -> scrollPane.setVvalue(1.0));
     }
 
     private static String safe(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    private record FileInfo(boolean isImage, String url, String name) {}
+
+    private FileInfo extractFileInfo(PayloadMessage msg) {
+        String fileUrl = safe(msg.getFileUrl());
+        String fileName = safe(msg.getFileName());
+        String type = safe(msg.getMessageType()).toUpperCase(Locale.ROOT);
+
+        // 1) moderní forma (fileUrl v payload)
+        if (!fileUrl.isBlank()) {
+            boolean isImage = "IMAGE".equals(type) || looksLikeImage(fileName, fileUrl);
+            return new FileInfo(isImage, client.fullUrl(fileUrl), fileName.isBlank() ? "file" : fileName);
+        }
+
+        // 2) fallback z historie: content = "[FILE] name | /uploads/.."
+        String content = safe(msg.getContent());
+        if (content.startsWith("[FILE]")) {
+            String rest = content.substring(6).trim();
+            String[] parts = rest.split("\\|");
+            if (parts.length >= 2) {
+                String name = parts[0].trim();
+                String url = parts[1].trim();
+                boolean isImage = looksLikeImage(name, url);
+                return new FileInfo(isImage, client.fullUrl(url), name.isBlank() ? "file" : name);
+            }
+        }
+
+        return null;
+    }
+
+    private boolean looksLikeImage(String name, String url) {
+        String s = (name + " " + url).toLowerCase(Locale.ROOT);
+        return s.endsWith(".png") || s.endsWith(".jpg") || s.endsWith(".jpeg") || s.endsWith(".gif") || s.endsWith(".webp") || s.endsWith(".bmp");
     }
 
     private String formatTime(String date) {
@@ -428,5 +552,22 @@ public class DirectMessagesView extends BorderPane {
         try { return LocalDateTime.parse(d).atZone(zone); } catch (DateTimeParseException ignored) {}
 
         return ZonedDateTime.now(zone);
+    }
+
+    private void chooseFile() {
+        FileChooser fc = new FileChooser();
+        fc.setTitle("Select a file");
+        java.io.File f = fc.showOpenDialog(getScene().getWindow());
+        if (f == null) return;
+
+        pendingFile = f;
+        pendingFileLabel.setText(f.getName());
+        clearFileBtn.setDisable(false);
+    }
+
+    private void clearPendingFile() {
+        pendingFile = null;
+        pendingFileLabel.setText("");
+        clearFileBtn.setDisable(true);
     }
 }
